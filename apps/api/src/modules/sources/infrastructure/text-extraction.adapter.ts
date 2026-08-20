@@ -60,37 +60,73 @@ export class TextExtractionAdapter extends TextExtractionPort {
    * having to hunt for it.
    */
   private async extractPdf(bytes: Buffer): Promise<ExtractedDocument> {
-    // Loaded lazily: pdf-parse pulls in the whole pdf.js bundle, which most
-    // requests never need.
-    const { PDFParse } = await import('pdf-parse');
+    /**
+     * pdf.js directly, rather than through `pdf-parse`.
+     *
+     * pdf-parse hard-depends on `@napi-rs/canvas` and loads it through a
+     * require it builds at runtime from `document.baseURI`. Vercel's file
+     * tracer cannot follow that, so the module is never bundled — the
+     * deployed function warns `Cannot find module '@napi-rs/canvas'`, fails to
+     * polyfill `DOMMatrix`, and every PDF then either fails outright or hangs
+     * in extraction. Installing or declaring the package does not help,
+     * because nothing statically references it.
+     *
+     * Canvas exists for *rendering*. Pulling text needs none of it, so going
+     * straight to pdf.js removes the dependency rather than fighting the
+     * bundler for it.
+     *
+     * Loaded lazily: pdf.js is a large bundle most requests never touch.
+     */
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-    const parser = new PDFParse({ data: new Uint8Array(bytes) });
     let sections: ExtractedSection[];
     let title: string | null = null;
+    let doc: Awaited<ReturnType<typeof pdfjs.getDocument>['promise']> | null = null;
 
     try {
-      /**
-       * Sequential, deliberately — NOT `Promise.all`.
-       *
-       * pdf.js hands the source buffer to its worker with a structured-clone
-       * *transfer*, which detaches it from this thread. Two operations started
-       * concurrently both try to transfer the same buffer and the second dies
-       * with `DOMException: Cannot transfer object of unsupported type`. It
-       * fails for every PDF, not just malformed ones.
-       */
-      const text = await parser.getText();
-      const info = await parser.getInfo().catch(() => null);
+      doc = await pdfjs.getDocument({
+        // pdf.js transfers the buffer to its worker, detaching it from this
+        // thread. A copy keeps the caller's Buffer usable afterwards.
+        data: new Uint8Array(bytes),
+        // No eval, no remote font fetches, no system font probing — this runs
+        // on untrusted uploads in a serverless sandbox.
+        isEvalSupported: false,
+        disableFontFace: true,
+        useSystemFonts: false,
+      }).promise;
 
-      const rawTitle = (info?.info as { Title?: unknown } | undefined)?.Title;
+      const metadata = await doc.getMetadata().catch(() => null);
+      const rawTitle = (metadata?.info as { Title?: unknown } | undefined)?.Title;
       if (typeof rawTitle === 'string' && rawTitle.trim()) title = rawTitle.trim();
 
-      sections = text.pages
-        .map((page) => ({
-          text: normalise(page.text),
-          pageNumber: page.num,
-          headingPath: [] as string[],
-        }))
-        .filter((section) => section.text.length > 0);
+      const pages: ExtractedSection[] = [];
+
+      // Sequential, deliberately — NOT `Promise.all`. Page tasks share one
+      // worker, and resolving thirty at once on a 1 GB function is how a large
+      // report turns into an out-of-memory kill.
+      for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+        const page = await doc.getPage(pageNumber);
+        try {
+          const content = await page.getTextContent();
+          let text = '';
+          for (const item of content.items) {
+            if (!('str' in item)) continue;
+            text += item.str;
+            // pdf.js reports line ends per item; without this the whole page
+            // collapses into one line and paragraph chunking has nothing to
+            // split on.
+            if (item.hasEOL) text += '\n';
+          }
+          const normalised = normalise(text);
+          if (normalised.length > 0) {
+            pages.push({ text: normalised, pageNumber, headingPath: [] });
+          }
+        } finally {
+          page.cleanup();
+        }
+      }
+
+      sections = pages;
     } catch (error) {
       // Logged at error, with the cause: this branch means the parser threw,
       // which is as likely to be a bug here as a bad file. A PDF that parses
@@ -102,7 +138,7 @@ export class TextExtractionAdapter extends TextExtractionPort {
       );
     } finally {
       // pdf.js holds a worker per document; leaking one leaks a thread.
-      await parser.destroy().catch(() => undefined);
+      await doc?.destroy().catch(() => undefined);
     }
 
     if (sections.length === 0) {
