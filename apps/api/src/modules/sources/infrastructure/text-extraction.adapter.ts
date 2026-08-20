@@ -69,10 +69,17 @@ export class TextExtractionAdapter extends TextExtractionPort {
     let title: string | null = null;
 
     try {
-      const [info, text] = await Promise.all([
-        parser.getInfo().catch(() => null),
-        parser.getText(),
-      ]);
+      /**
+       * Sequential, deliberately — NOT `Promise.all`.
+       *
+       * pdf.js hands the source buffer to its worker with a structured-clone
+       * *transfer*, which detaches it from this thread. Two operations started
+       * concurrently both try to transfer the same buffer and the second dies
+       * with `DOMException: Cannot transfer object of unsupported type`. It
+       * fails for every PDF, not just malformed ones.
+       */
+      const text = await parser.getText();
+      const info = await parser.getInfo().catch(() => null);
 
       const rawTitle = (info?.info as { Title?: unknown } | undefined)?.Title;
       if (typeof rawTitle === 'string' && rawTitle.trim()) title = rawTitle.trim();
@@ -85,10 +92,13 @@ export class TextExtractionAdapter extends TextExtractionPort {
         }))
         .filter((section) => section.text.length > 0);
     } catch (error) {
-      this.logger.warn({ err: error }, 'pdf parse failed');
+      // Logged at error, with the cause: this branch means the parser threw,
+      // which is as likely to be a bug here as a bad file. A PDF that parses
+      // but yields nothing is handled separately below as `no_text_layer`.
+      this.logger.error({ err: error }, 'pdf parse threw');
       throw new InvariantViolationError(
         'source.unreadable_pdf',
-        'this PDF could not be read — it may be encrypted or image-only',
+        'this PDF could not be read — it may be password-protected or damaged',
       );
     } finally {
       // pdf.js holds a worker per document; leaking one leaks a thread.
