@@ -74,6 +74,8 @@ export const envSchema = z.object({
   /** Audio overviews need a TTS vendor; `none` renders script-only. */
   TTS_PROVIDER: z.enum(['none', 'elevenlabs']).default('none'),
   ELEVENLABS_API_KEY: optional(z.string()),
+  /** Concurrent TTS requests. The free tier allows 2; paid plans allow more. */
+  ELEVENLABS_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(2),
   ELEVENLABS_VOICE_HOST_A: z.string().default('21m00Tcm4TlvDq8ikWAM'),
   ELEVENLABS_VOICE_HOST_B: z.string().default('AZnzlk1XvdvUeBnXmlld'),
 

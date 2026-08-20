@@ -165,6 +165,57 @@ if (looksLikePlaceholder(anthropicKey)) {
 }
 
 // ---------------------------------------------------------------------------
+// Speech (optional)
+// ---------------------------------------------------------------------------
+const ttsProvider = get('TTS_PROVIDER') || 'none';
+const elevenKey = get('ELEVENLABS_API_KEY');
+
+if (ttsProvider === 'none') {
+  report(
+    'Audio overviews (optional)',
+    true,
+    elevenKey
+      ? 'TTS_PROVIDER=none — a key is present but unused, so overviews store the script only'
+      : 'TTS_PROVIDER=none — overviews store the script only',
+    elevenKey ? 'Set TTS_PROVIDER=elevenlabs in apps/api/.env to synthesise audio.' : null,
+  );
+} else if (looksLikePlaceholder(elevenKey)) {
+  report(
+    'Audio overviews',
+    false,
+    'TTS_PROVIDER=elevenlabs but no usable ELEVENLABS_API_KEY',
+    'Add the key, or set TTS_PROVIDER=none to fall back to script-only.',
+  );
+} else {
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/user', {
+      headers: { 'xi-api-key': elevenKey },
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+      report('Audio overviews', false, `ElevenLabs rejected the key (HTTP ${res.status})`, null);
+    } else {
+      const sub = (await res.json())?.subscription ?? {};
+      const left = (sub.character_limit ?? 0) - (sub.character_count ?? 0);
+
+      // A dialogue runs a few thousand characters, so a nearly-empty quota is
+      // worth surfacing before someone waits two minutes for a silent failure.
+      report(
+        'Audio overviews',
+        left > 3000,
+        `${sub.tier ?? 'unknown'} tier · ${left} characters left · concurrency ${get('ELEVENLABS_MAX_CONCURRENCY') || 2}`,
+        left > 3000
+          ? null
+          : 'Fewer than ~3000 characters remain — roughly one overview. Synthesis will start failing.',
+      );
+    }
+  } catch (error) {
+    report('Audio overviews', false, 'could not reach api.elevenlabs.io', String(error));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Output
 // ---------------------------------------------------------------------------
 console.log(`\nReading ${envFile}\n`);

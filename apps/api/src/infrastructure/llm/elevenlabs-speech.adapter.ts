@@ -34,7 +34,10 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
       throw new DependencyFailureError('elevenlabs', 'dialogue has no turns');
     }
 
-    const limit = pLimit(3);
+    // ElevenLabs caps concurrent requests by plan — 2 on the free tier. A
+    // dialogue is one request per turn, so exceeding the cap makes a 20-turn
+    // overview fail on a limit rather than on anything to do with the content.
+    const limit = pLimit(this.config.ELEVENLABS_MAX_CONCURRENCY);
     const clips = await Promise.all(
       turns.map((turn) => limit(() => this.synthesiseTurn(turn))),
     );
