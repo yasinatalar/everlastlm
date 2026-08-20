@@ -68,6 +68,24 @@ describe('TextExtractionAdapter — PDF', () => {
       adapter.extract({ kind: 'pdf', bytes: Buffer.alloc(0) }),
     ).rejects.toMatchObject({ code: 'source.empty' });
   });
+
+  /**
+   * Regression: pdf.js polyfills `DOMMatrix` from the optional `@napi-rs/canvas`
+   * and, when that is missing, warns and then evaluates `new DOMMatrix()` at
+   * module scope anyway. The import threw `ReferenceError` before any PDF was
+   * touched, which reached the user as the generic "could not be processed".
+   *
+   * The package resolves from pnpm's store locally and is absent from the
+   * deployed bundle, so this asserts on the globals rather than the parse: they
+   * are what stands between a laptop that works and a deployment that does not.
+   */
+  it('defines the browser globals pdf.js needs to evaluate without canvas', async () => {
+    await adapter.extract({ kind: 'pdf', bytes: buildPdf('Anything at all.') });
+
+    expect(typeof (globalThis as Record<string, unknown>).DOMMatrix).toBe('function');
+    expect(typeof (globalThis as Record<string, unknown>).ImageData).toBe('function');
+    expect(typeof (globalThis as Record<string, unknown>).Path2D).toBe('function');
+  });
 });
 
 describe('TextExtractionAdapter — text and markdown', () => {

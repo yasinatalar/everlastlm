@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
@@ -52,29 +54,84 @@ const importFile = async <T>(path: string): Promise<T> => {
 };
 
 /**
+ * A short, bounded reason to carry in the failure the user sees.
+ *
+ * Ingestion runs after the HTTP response, and logs written there do not reach
+ * the platform's log stream at all — verified, by failing an upload on purpose
+ * and finding a log window that covers it and contains nothing. The stored
+ * failure is therefore the only channel that survives, so a load failure names
+ * its cause instead of being indistinguishable from every other one.
+ */
+const describeCause = (error: unknown): string => {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code) return code;
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split('\n')[0]?.slice(0, 120) ?? 'unknown';
+};
+
+/**
  * Resolved once per instance: the module cache would dedupe anyway, but the
  * promise is what makes two concurrent ingests share a single load.
  */
 let pdfjs: Promise<Pdfjs> | null = null;
 
+/**
+ * Where `scripts/vendor-pdfjs.mjs` puts the build, relative to this file's
+ * compiled location in `dist/modules/sources/infrastructure/`.
+ */
+const VENDORED_PDFJS = join(__dirname, '..', '..', '..', 'vendor', 'pdfjs');
+
+/**
+ * Prefers the copy shipped inside `dist/`, which `vercel.json` includes
+ * wholesale, and falls back to normal package resolution.
+ *
+ * The fallback is what `nest start --watch` and the unit tests run on, since
+ * neither performs the vendoring step. The deployed function takes the first
+ * branch, and so depends on no bundler analysis and no `node_modules` layout.
+ */
+const resolvePdfjs = (file: string): string => {
+  const vendored = join(VENDORED_PDFJS, file);
+  return existsSync(vendored) ? vendored : require.resolve(`pdfjs-dist/legacy/build/${file}`);
+};
+
+/**
+ * Satisfies the browser globals pdf.js insists on before it will even evaluate.
+ *
+ * On Node, pdf.js polyfills `DOMMatrix`, `ImageData` and `Path2D` from
+ * `@napi-rs/canvas`; when that package is missing it only *warns*, and then
+ * evaluates `const SCALE_MATRIX = new DOMMatrix()` at module scope regardless.
+ * The result is `ReferenceError: DOMMatrix is not defined` thrown out of the
+ * import — which is precisely how every PDF failed in production, where the
+ * optional native package is not in the bundle, while a laptop resolved it from
+ * pnpm's store and parsed the same file happily.
+ *
+ * All three are needed only to rasterise. Extracting a text layer never touches
+ * them, so empty stand-ins are enough to get the module evaluated, and the real
+ * `@napi-rs/canvas` — a large platform-specific binary — stays out of the
+ * deployment entirely. pdf.js still logs one warning that it could not load the
+ * package; that one is harmless, and the "rendering may be broken" warnings that
+ * used to follow it are gone, because the globals it wanted are already there.
+ */
+const definePdfjsGlobals = (): void => {
+  const globals = globalThis as Record<string, unknown>;
+  globals.DOMMatrix ??= class DOMMatrix {};
+  globals.ImageData ??= class ImageData {};
+  globals.Path2D ??= class Path2D {};
+};
+
 const loadPdfjs = (): Promise<Pdfjs> => {
   pdfjs ??= (async () => {
-    // `require.resolve` with a literal is the one part of this a bundler can
-    // follow. Vercel's file tracer reads it statically and copies the file into
-    // the deployed function; without it, pdf.js is simply absent at runtime.
-    const module = await importFile<Pdfjs>(require.resolve('pdfjs-dist/legacy/build/pdf.mjs'));
+    definePdfjsGlobals();
+
+    const module = await importFile<Pdfjs>(resolvePdfjs('pdf.mjs'));
 
     /**
      * On Node, pdf.js runs its worker on the main thread and fetches the worker
      * module with `await import(GlobalWorkerOptions.workerSrc)` — a *dynamic*
-     * specifier defaulting to the relative `./pdf.worker.mjs`. No tracer can
-     * follow that, so the worker never ships and the first `getDocument` fails.
-     * Resolving it to an absolute path fixes both halves: the tracer sees the
-     * `require.resolve`, and the runtime import gets a path that exists.
+     * specifier defaulting to the relative `./pdf.worker.mjs`. Pointing it at an
+     * absolute path is what makes that import resolve to a file we know shipped.
      */
-    module.GlobalWorkerOptions.workerSrc = pathToFileURL(
-      require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
-    ).href;
+    module.GlobalWorkerOptions.workerSrc = pathToFileURL(resolvePdfjs('pdf.worker.mjs')).href;
 
     return module;
   })().catch((error: unknown) => {
@@ -159,7 +216,8 @@ export class TextExtractionAdapter extends TextExtractionPort {
       this.logger.error({ err: error }, 'pdf.js failed to load');
       throw new InvariantViolationError(
         'source.pdf_engine_unavailable',
-        'PDFs cannot be read on this server right now — this is a server fault, not a problem with your file',
+        `PDFs cannot be read on this server right now (${describeCause(error)}) — this is a ` +
+          'server fault, not a problem with your file',
       );
     }
 
