@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { DependencyFailureError } from '../../shared/kernel/domain-error';
+import {
+  DependencyFailureError,
+  DependencyNotConfiguredError,
+} from '../../shared/kernel/domain-error';
 import {
   TextGenerationPort,
   type GenerationOptions,
@@ -108,6 +111,9 @@ export class ClaudeTextGenerationAdapter extends TextGenerationPort {
       return message;
     } catch (error) {
       if (error instanceof DependencyFailureError) throw error;
+      if (error instanceof Anthropic.AuthenticationError) {
+        throw new DependencyNotConfiguredError('anthropic');
+      }
       if (error instanceof Anthropic.RateLimitError) {
         throw new DependencyFailureError('anthropic', 'rate limited, please retry shortly');
       }

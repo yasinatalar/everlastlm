@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { SOURCE_TRUST_BOUNDARY } from '../../../infrastructure/llm/prompt-safety';
-import { InvariantViolationError } from '../../../shared/kernel/domain-error';
+import {
+  DependencyNotConfiguredError,
+  InvariantViolationError,
+} from '../../../shared/kernel/domain-error';
 import { BackgroundTasksPort } from '../../../shared/ports/background-tasks.port';
 import { EmbeddingPort } from '../../../shared/ports/embedding.port';
 import { TextGenerationPort } from '../../../shared/ports/text-generation.port';
@@ -102,14 +105,20 @@ export class IngestionService {
         'source ingested successfully',
       );
     } catch (error) {
-      // Only `InvariantViolationError` carries a message written for a user
-      // ("this PDF could not be read"). A dependency failure quotes the vendor
-      // verbatim — "voyage responded 401: Provided API key is invalid" — which
-      // is an operator's problem and must never be shown to a reader.
+      // Three cases, and conflating them is what makes an unfixable failure
+      // look like a transient one:
+      //
+      //  - an invariant violation carries a message written for a user
+      //    ("this PDF could not be read"), so it passes through;
+      //  - a rejected credential will never succeed on retry, so say so
+      //    without quoting the vendor or leaking any part of the key;
+      //  - anything else may genuinely be transient.
       const reason =
         error instanceof InvariantViolationError
           ? error.message
-          : 'this source could not be processed — please try again';
+          : error instanceof DependencyNotConfiguredError
+            ? 'the AI service is not configured on this server — an administrator needs to add a valid API key'
+            : 'this source could not be processed — please try again';
       this.logger.error({ err: error, sourceId: source.id }, 'ingestion failed');
 
       source.markFailed(reason);

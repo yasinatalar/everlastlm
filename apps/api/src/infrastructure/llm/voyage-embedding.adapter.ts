@@ -2,7 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { request } from 'undici';
 import { APP_CONFIG } from '../../config/app-config.module';
 import type { Env } from '../../config/env.schema';
-import { DependencyFailureError } from '../../shared/kernel/domain-error';
+import {
+  DependencyFailureError,
+  DependencyNotConfiguredError,
+} from '../../shared/kernel/domain-error';
 import { EmbeddingPort } from '../../shared/ports/embedding.port';
 
 /** Voyage caps a single request at 1000 inputs; stay well under it. */
@@ -70,6 +73,14 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
       });
 
       const payload = (await res.body.json()) as VoyageResponse;
+
+      // A rejected key is a configuration problem, not a transient one.
+      // Retrying it burns the backoff budget and then reports a misleading
+      // "try again" to someone who cannot fix it by trying again.
+      if (res.statusCode === 401 || res.statusCode === 403) {
+        throw new DependencyNotConfiguredError('voyage');
+      }
+
       if (res.statusCode >= 400) {
         const retryable = res.statusCode === 429 || res.statusCode >= 500;
         throw new EmbeddingHttpError(
@@ -110,6 +121,10 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
       try {
         return await fn();
       } catch (error) {
+        // Never retried, and never rewrapped — it must reach the caller intact
+        // so the failure is reported as configuration rather than a fault.
+        if (error instanceof DependencyNotConfiguredError) throw error;
+
         lastError = error;
         const retryable = !(error instanceof EmbeddingHttpError) || error.retryable;
         if (!retryable || attempt === attempts) break;

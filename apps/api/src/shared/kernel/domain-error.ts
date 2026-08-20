@@ -77,12 +77,31 @@ export class QuotaExceededError extends DomainError {
   }
 }
 
-/** An upstream dependency (Supabase, Claude, Voyage) failed. */
+/** An upstream dependency (Supabase, Claude, Voyage) failed transiently. */
 export class DependencyFailureError extends DomainError {
   readonly code: string;
 
   constructor(dependency: string, message: string) {
     super(message);
     this.code = `dependency.${dependency}_failed`;
+  }
+}
+
+/**
+ * An upstream dependency rejected our credentials.
+ *
+ * Deliberately distinct from `DependencyFailureError`: that one means "it
+ * broke, try again", this one means "it will never work until an operator
+ * fixes the configuration". Collapsing the two produces the worst kind of
+ * error message — one that tells a user to retry something that cannot
+ * succeed, which is exactly how a missing API key gets mistaken for a bug in
+ * the document they uploaded.
+ */
+export class DependencyNotConfiguredError extends DomainError {
+  readonly code: string;
+
+  constructor(readonly dependency: string) {
+    super(`${dependency} rejected the configured credentials`);
+    this.code = `dependency.${dependency}_unconfigured`;
   }
 }

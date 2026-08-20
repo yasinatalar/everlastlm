@@ -6,7 +6,7 @@ import type {
 } from '@everlast/contracts';
 import { sanitiseForPrompt, sanitiseTitleForPrompt } from '../../../infrastructure/llm/prompt-safety';
 import {
-  DomainError,
+  DependencyNotConfiguredError,
   InvariantViolationError,
   NotFoundError,
 } from '../../../shared/kernel/domain-error';
@@ -138,7 +138,11 @@ export class StudioService {
       await this.studio.markReady(artifactId, content);
     } catch (error) {
       const reason =
-        error instanceof DomainError ? error.message : 'generation failed, please try again';
+        error instanceof DependencyNotConfiguredError
+          ? 'the AI service is not configured on this server — an administrator needs to add a valid API key'
+          : error instanceof InvariantViolationError
+            ? error.message
+            : 'generation failed, please try again';
       this.logger.error({ err: error, artifactId }, 'studio generation failed');
       await this.studio.markFailed(artifactId, reason).catch(() => undefined);
     }

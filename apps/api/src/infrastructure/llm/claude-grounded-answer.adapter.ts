@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Citation } from '@everlast/contracts';
-import { DependencyFailureError } from '../../shared/kernel/domain-error';
+import {
+  DependencyFailureError,
+  DependencyNotConfiguredError,
+} from '../../shared/kernel/domain-error';
 import {
   GroundedAnswerPort,
   type GroundedAnswerEvent,
@@ -133,6 +136,9 @@ export class ClaudeGroundedAnswerAdapter extends GroundedAnswerPort {
         },
       };
     } catch (error) {
+      if (error instanceof Anthropic.AuthenticationError) {
+        throw new DependencyNotConfiguredError('anthropic');
+      }
       if (error instanceof Anthropic.RateLimitError) {
         throw new DependencyFailureError('anthropic', 'rate limited, please retry shortly');
       }

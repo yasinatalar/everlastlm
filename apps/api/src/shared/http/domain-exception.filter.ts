@@ -13,6 +13,7 @@ import { RequestContextService } from '../context/request-context';
 import {
   ConflictError,
   DependencyFailureError,
+  DependencyNotConfiguredError,
   DomainError,
   ForbiddenError,
   InvariantViolationError,
@@ -103,6 +104,8 @@ const statusFor = (error: DomainError): number => {
   if (error instanceof ConflictError) return HttpStatus.CONFLICT;
   if (error instanceof QuotaExceededError) return HttpStatus.UNPROCESSABLE_ENTITY;
   if (error instanceof InvariantViolationError) return HttpStatus.BAD_REQUEST;
+  // 503 rather than 502: the dependency answered, we are the ones misconfigured.
+  if (error instanceof DependencyNotConfiguredError) return HttpStatus.SERVICE_UNAVAILABLE;
   if (error instanceof DependencyFailureError) return HttpStatus.BAD_GATEWAY;
   return HttpStatus.INTERNAL_SERVER_ERROR;
 };
