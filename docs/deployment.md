@@ -43,13 +43,26 @@ with Upstash) before opening signups.
 You already have a project. Get its **Project Ref** from the dashboard URL
 (`supabase.com/dashboard/project/<ref>`).
 
-Apply the schema:
+Apply the schema. Either route works; the CLI is the repeatable one:
 
 ```bash
 supabase login
 supabase link --project-ref <ref>
 supabase db push          # applies supabase/migrations in order
 ```
+
+Or, with no CLI setup, paste **`supabase/schema.sql`** into the dashboard's SQL
+Editor and run it. That file is every migration concatenated in order
+(`pnpm db:schema` regenerates it) and is verified to apply as a single script.
+
+Confirm it worked — this should list 10 tables:
+
+```bash
+curl -s "https://<ref>.supabase.co/rest/v1/notebooks?select=id&limit=1" \
+  -H "apikey: <service_role key>" -H "Authorization: Bearer <service_role key>"
+```
+
+`{"code":"PGRST205"}` means the schema was never applied.
 
 Then in **Authentication → URL Configuration**:
 
@@ -120,9 +133,19 @@ RATE_LIMIT_LIMIT              120
 RATE_LIMIT_AI_LIMIT           20
 ```
 
-**Leave `SUPABASE_JWT_SECRET` unset.** Hosted projects sign asymmetrically and
-publish a JWKS, which the verifier discovers on its own. Setting it would enable
-the legacy HS256 path you do not want in production.
+**`SUPABASE_JWT_SECRET` depends on how your project signs tokens.** Check the
+`alg` in the header of your anon key:
+
+```bash
+node -e "console.log(JSON.parse(Buffer.from(process.argv[1].split('.')[0],'base64url')))" "<anon key>"
+```
+
+- `HS256` — a legacy JWT-secret project. **Set it**, to the JWT Secret from
+  Project Settings → API. Without it the verifier refuses every token.
+- `ES256`/`RS256` — the project publishes a JWKS and the verifier finds the key
+  itself. Leave it unset.
+
+An empty value counts as unset, so `SUPABASE_JWT_SECRET=` is safe.
 
 `PORT` is meaningless on serverless — the schema defaults it and it is ignored.
 

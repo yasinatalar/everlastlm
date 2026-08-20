@@ -22,7 +22,8 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:diff": "supabase db diff",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "db:schema": "bash -c '{ echo \"-- Everlast \u2014 complete schema, generated from supabase/migrations/\"; echo \"-- Regenerate with: pnpm db:schema\"; echo; for f in supabase/migrations/*.sql; do echo \"-- === $(basename $f) ===\"; cat \"$f\"; echo; done; } > supabase/schema.sql'"
   },
   "devDependencies": {
     "prettier": "3.9.6",

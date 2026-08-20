@@ -10,5 +10,18 @@ create extension if not exists "pg_trgm" with schema extensions;
 -- Case-insensitive e-mail comparison without lower() on every lookup.
 create extension if not exists "citext" with schema extensions;
 
--- Make the operators/types resolvable without schema-qualifying every usage.
-alter database postgres set search_path to "$user", public, extensions;
+-- Convenience only: every object below is schema-qualified (`extensions.vector`),
+-- so nothing depends on this. Guarded because the database is not always named
+-- `postgres`, and a hosted role may lack ALTER DATABASE — neither of which
+-- should abort the migration.
+do $$
+begin
+  execute format(
+    'alter database %I set search_path to "$user", public, extensions',
+    current_database()
+  );
+exception
+  when insufficient_privilege or undefined_object then
+    raise notice 'skipped search_path default (not permitted here)';
+end
+$$;
