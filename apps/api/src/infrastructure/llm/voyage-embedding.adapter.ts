@@ -10,7 +10,26 @@ import { EmbeddingPort } from '../../shared/ports/embedding.port';
 
 /** Voyage caps a single request at 1000 inputs; stay well under it. */
 const MAX_BATCH = 96;
-const ENDPOINT = 'https://api.voyageai.com/v1/embeddings';
+
+const VOYAGE_HOST = 'https://api.voyageai.com/v1';
+const ATLAS_HOST = 'https://ai.mongodb.com/v1';
+
+/**
+ * Picks the host from the key prefix, as the official Voyage client does.
+ *
+ * The same models are reachable from two places with identical request and
+ * response shapes, but each only accepts its own credential:
+ *
+ *   `pa-…`  voyageai.com          (Voyage platform key)
+ *   `al-…`  ai.mongodb.com        (Atlas "Model API Key" — MongoDB owns Voyage)
+ *
+ * Sending an Atlas key to voyageai.com returns a bare 401, which reads exactly
+ * like a wrong or expired key and sends you to regenerate a perfectly good one.
+ */
+export const resolveVoyageBaseUrl = (apiKey: string, override?: string): string => {
+  if (override) return override.replace(/\/+$/, '');
+  return apiKey.startsWith('al-') ? ATLAS_HOST : VOYAGE_HOST;
+};
 
 interface VoyageResponse {
   data?: { embedding: number[]; index: number }[];
@@ -21,11 +40,19 @@ interface VoyageResponse {
 @Injectable()
 export class VoyageEmbeddingAdapter extends EmbeddingPort {
   private readonly logger = new Logger(VoyageEmbeddingAdapter.name);
+  private readonly endpoint: string;
   readonly dimensions: number;
 
   constructor(@Inject(APP_CONFIG) private readonly config: Env) {
     super();
     this.dimensions = config.VOYAGE_DIMENSIONS;
+
+    const baseUrl = resolveVoyageBaseUrl(config.VOYAGE_API_KEY, config.VOYAGE_BASE_URL);
+    this.endpoint = `${baseUrl}/embeddings`;
+
+    // Logged at startup so a credential/host mismatch is visible before the
+    // first upload fails, rather than as a 401 buried in an ingestion run.
+    this.logger.log(`embeddings: ${config.VOYAGE_MODEL} via ${baseUrl}`);
   }
 
   async embedDocuments(texts: string[]): Promise<number[][]> {
@@ -61,7 +88,7 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
     });
 
     const response = await this.withRetry(async () => {
-      const res = await request(ENDPOINT, {
+      const res = await request(this.endpoint, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${this.config.VOYAGE_API_KEY}`,
