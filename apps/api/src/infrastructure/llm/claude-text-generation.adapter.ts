@@ -128,7 +128,17 @@ export class ClaudeTextGenerationAdapter extends TextGenerationPort {
         // Omitted entirely on models that predate adaptive thinking — sending
         // it there is a hard 400, not a silently ignored parameter.
         ...(supportsAdaptiveThinking(model) ? { thinking: { type: 'adaptive' as const } } : {}),
-        ...(format ? { output_config: { format } } : {}),
+        // One object, deliberately. Spreading `output_config` twice silently
+        // drops the first — and `effort` is only ever set alongside `format`,
+        // so the speed setting would be lost in exactly the case it exists for.
+        ...(options.effort || format
+          ? {
+              output_config: {
+                ...(options.effort ? { effort: options.effort } : {}),
+                ...(format ? { format } : {}),
+              },
+            }
+          : {}),
         system: options.cacheSystemPrompt
           ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
           : system,

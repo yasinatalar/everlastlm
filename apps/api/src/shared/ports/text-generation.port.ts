@@ -6,6 +6,12 @@ export interface GenerationOptions {
   maxTokens?: number;
   /** Marks the system prompt as a cache breakpoint when it is large + stable. */
   cacheSystemPrompt?: boolean;
+  /**
+   * How much thinking the model spends. Lower is materially faster — measured
+   * roughly 2x between `high` and `low` — at a cost in depth. Set it where a
+   * wall-clock ceiling matters more than the last increment of quality.
+   */
+  effort?: 'low' | 'medium' | 'high';
 }
 
 export abstract class TextGenerationPort {

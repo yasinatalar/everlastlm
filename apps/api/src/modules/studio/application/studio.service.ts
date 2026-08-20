@@ -18,9 +18,21 @@ import { SourceRepository } from '../../sources/domain/source.repository';
 import { StudioAudioStoragePort, StudioRepository } from '../domain/studio.repository';
 import { STUDIO_RECIPES } from './studio-prompts';
 
-/** Chunks pulled per source, and the overall character budget for the prompt. */
+/**
+ * Chunks pulled per source, the character budget for the prompt, and how hard
+ * the model thinks.
+ *
+ * These are set for quality and bounded by the function timeout, not the other
+ * way round. Measured on Claude Opus 5 over six real sources: ~121s at these
+ * settings, which needs a ceiling above Vercel's Hobby 60s — see
+ * `maxDuration` in apps/api/vercel.json and docs/deployment.md.
+ *
+ * Lowering `maxTokens` is NOT a way to go faster: it truncates the JSON
+ * mid-object and the structured parse then fails outright.
+ */
 const CHUNKS_PER_SOURCE = 24;
 const MAX_PROMPT_CHARS = 200_000;
+const STUDIO_EFFORT = 'high' as const;
 
 @Injectable()
 export class StudioService {
@@ -127,7 +139,7 @@ export class StudioService {
         recipe.system,
         `${corpus}${focus}`,
         recipe.schema,
-        { maxTokens: recipe.maxTokens, cacheSystemPrompt: true },
+        { maxTokens: recipe.maxTokens, cacheSystemPrompt: true, effort: STUDIO_EFFORT },
       )) as StudioContent;
 
       if (content.kind === 'audio_overview') {

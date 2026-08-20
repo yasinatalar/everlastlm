@@ -14,29 +14,38 @@ is verified after it ships.
 
 ---
 
-## Read this first: the Hobby-plan ceiling
+## Function timeout: this needs Pro
 
-Vercel functions are frozen the moment the response is sent, and on the **Hobby
-plan they are killed at 60 seconds**. Three consequences, none of which show up
-locally:
+Vercel freezes a function the moment the response is sent, and kills it at the
+plan's ceiling. Measured on this app with six real sources:
 
-| Feature | Effect |
+| Work | Time |
 | --- | --- |
-| **Source ingestion** | Runs via `waitUntil` after the response. A source whose extract + embed + summarise exceeds 60s is killed mid-run and stops at `extracting`/`embedding`. It stays visible with a **Try again** button — it is not silently lost. Roughly: text and small PDFs finish comfortably; a 200-page PDF may not. |
-| **Audio overview** | Script generation plus one TTS call per turn will usually exceed 60s. Expect it to fail on Hobby. Leave `TTS_PROVIDER=none` (the script is still produced and shown) or upgrade. |
-| **Chat streaming** | An answer must finish within 60s. Normal answers are well inside this; very long ones get cut off. |
+| Studio briefing doc / study guide (Opus 5, effort high) | ~121s |
+| Audio overview (script + one TTS call per turn) | longer still |
+| Source ingestion, large PDF at 3 RPM embeddings | can exceed 60s |
+| Chat answer | comfortably under |
 
-Upgrading to Pro raises the ceiling to 300s and fixes all three. If you stay on
-Hobby and ingestion of large documents matters, the right fix is a real queue
-(Upstash QStash or Inngest) rather than a bigger timeout.
+**Hobby's 60s ceiling is therefore not enough** — `apps/api/vercel.json` sets
+`maxDuration: 300`, which requires **Pro**. On Hobby the value is clamped and
+studio generation is killed mid-run, leaving the artifact stuck at `generating`.
 
-**Also note:** rate limiting is in-memory, so on serverless each instance keeps
-its own counter and the effective limit is looser than configured. It still
-blunts a single-client hammering, but it is not a hard spend cap. If model spend
-is a concern, move the throttler to a shared store (`@nest-lab/throttler-storage-redis`
-with Upstash) before opening signups.
+Things that do *not* fix this, tested:
 
----
+- **A queue (QStash/Inngest) does not extend the timeout.** It adds durability
+  and retries, but each callback is still a function bound by the same ceiling.
+  Useful for reliability; useless for a single 121s model call.
+- **Lowering `maxTokens` does not speed generation up.** It truncates the JSON
+  mid-object and the structured parse then fails outright — measured as a
+  briefing doc failing at 73s that would otherwise have succeeded.
+- Lowering `effort` to `low` roughly halves the time but still landed at ~64s,
+  and costs real depth.
+
+**Rate limiting is in-memory**, so on serverless each instance keeps its own
+counter and the effective limit is looser than configured. It blunts a single
+client hammering the API but is not a hard spend cap. Move the throttler to a
+shared store (`@nest-lab/throttler-storage-redis` with Upstash) before opening
+signups.
 
 ## 1. Supabase (production)
 
