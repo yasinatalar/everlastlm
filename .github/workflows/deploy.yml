@@ -75,7 +75,9 @@ jobs:
           cache: pnpm
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@59.1.4
+        # npm, not `pnpm add -g`: pnpm's global bin directory is not on PATH
+        # on GitHub runners, so the installed binary is unreachable.
+        run: npm install -g vercel@59.1.4
 
       # `pull` fetches the project's settings *and* its production environment
       # variables, which is what makes the NEXT_PUBLIC_* values correct in the
@@ -87,7 +89,25 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "Deployed to ${url}"
+
+      - name: Verify the app responds
+        run: |
+          set -uo pipefail
+          url="${{ steps.deploy.outputs.url }}"
+          for attempt in 1 2 3; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -L "${url}/login" || true)"
+            echo "  ${url}/login -> ${code}"
+            [ "${code}" = "200" ] && exit 0
+            sleep 8
+          done
+          echo "::error::Web deployment did not return 200 for /login"
+          exit 1
 
   api:
     name: Deploy api
@@ -112,7 +132,9 @@ jobs:
           cache: pnpm
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@59.1.4
+        # npm, not `pnpm add -g`: pnpm's global bin directory is not on PATH
+        # on GitHub runners, so the installed binary is unreachable.
+        run: npm install -g vercel@59.1.4
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -121,20 +143,46 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          set -euo pipefail
+          # The CLI prints the deployment URL on stdout and progress on stderr.
+          url="$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "Deployed to ${url}"
 
       # Deploying an API whose own health check fails is worse than not
       # deploying: it looks green while every request 500s.
+      #
+      # The freshly-created deployment URL is checked first because it resolves
+      # immediately; the custom domain is only reachable once DNS is attached,
+      # so relying on it alone would fail every deploy made before that.
       - name: Verify deployment is healthy
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          candidates=("${{ steps.deploy.outputs.url }}" "https://api.everlastlm.com")
+
           for attempt in 1 2 3 4 5; do
-            if curl -fsS --max-time 20 https://api.everlastlm.com/health/ready | tee /dev/stderr | grep -q '"database":true'; then
-              echo "API healthy"
-              exit 0
-            fi
-            echo "attempt $attempt failed; retrying in 10s"
+            for base in "${candidates[@]}"; do
+              [ -z "${base}" ] && continue
+              body="$(curl -fsS --max-time 20 "${base}/health/ready" 2>/dev/null || true)"
+              # Truncated: an unhealthy endpoint may answer with a full HTML
+              # error page, and echoing it verbatim buries the log.
+              if [ "${#body}" -gt 120 ]; then
+                echo "  ${base} -> ${body:0:120}… (truncated)"
+              else
+                echo "  ${base} -> ${body:-<no response>}"
+              fi
+              case "${body}" in
+                *'"database":true'*)
+                  echo "API healthy at ${base}"
+                  exit 0
+                  ;;
+              esac
+            done
+            echo "attempt ${attempt} failed; retrying in 10s"
             sleep 10
           done
+
           echo "::error::API did not become healthy after deploy"
           exit 1
