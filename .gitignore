@@ -9,6 +9,13 @@ coverage/
 .env
 .env.local
 .env.*.local
+# Anything derived from an env file — .env.local.bak, .env.production.backup,
+# .env.save — is just as sensitive as the original and matches none of the
+# patterns above.
+.env*.bak
+.env*.backup
+.env*.save
+.env*.orig
 !.env.example
 
 .DS_Store
