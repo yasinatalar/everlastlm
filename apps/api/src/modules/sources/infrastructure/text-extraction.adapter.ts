@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import mammoth from 'mammoth';
@@ -15,6 +16,76 @@ import {
 
 /** Markdown/HTML headings become the `headingPath` carried by every chunk. */
 const MARKDOWN_HEADING = /^(#{1,6})\s+(.+)$/;
+
+type Pdfjs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+
+/** Built from a constant, never from user input. See `importFile`. */
+const dynamicImport = new Function('url', 'return import(url)') as (
+  url: string,
+) => Promise<unknown>;
+
+/**
+ * Imports an ES module by absolute path, from CommonJS output.
+ *
+ * The indirection through `Function` is the whole point. This package compiles
+ * with `module: CommonJS`, and under that setting TypeScript rewrites every
+ * `await import(…)` into `require(…)`. pdfjs-dist ships ESM only, so the rewrite
+ * becomes `require()` of an ES module — allowed from Node 22.12 onwards, and
+ * `ERR_REQUIRE_ESM` before it. Local development runs a newer Node than the
+ * deployed function does, which is exactly why pdf.js loaded on a laptop and
+ * threw for every PDF in production, with nothing in the logs to say so.
+ *
+ * The fallback is for VM-based test runners, which evaluate this file without a
+ * dynamic-import callback and reject the `Function` form outright. Requiring an
+ * ES module is safe there precisely because those hosts run a Node new enough to
+ * permit it; the deployed function never reaches it.
+ */
+const importFile = async <T>(path: string): Promise<T> => {
+  try {
+    return (await dynamicImport(pathToFileURL(path).href)) as T;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING') {
+      throw error;
+    }
+    return require(path) as T;
+  }
+};
+
+/**
+ * Resolved once per instance: the module cache would dedupe anyway, but the
+ * promise is what makes two concurrent ingests share a single load.
+ */
+let pdfjs: Promise<Pdfjs> | null = null;
+
+const loadPdfjs = (): Promise<Pdfjs> => {
+  pdfjs ??= (async () => {
+    // `require.resolve` with a literal is the one part of this a bundler can
+    // follow. Vercel's file tracer reads it statically and copies the file into
+    // the deployed function; without it, pdf.js is simply absent at runtime.
+    const module = await importFile<Pdfjs>(require.resolve('pdfjs-dist/legacy/build/pdf.mjs'));
+
+    /**
+     * On Node, pdf.js runs its worker on the main thread and fetches the worker
+     * module with `await import(GlobalWorkerOptions.workerSrc)` — a *dynamic*
+     * specifier defaulting to the relative `./pdf.worker.mjs`. No tracer can
+     * follow that, so the worker never ships and the first `getDocument` fails.
+     * Resolving it to an absolute path fixes both halves: the tracer sees the
+     * `require.resolve`, and the runtime import gets a path that exists.
+     */
+    module.GlobalWorkerOptions.workerSrc = pathToFileURL(
+      require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+    ).href;
+
+    return module;
+  })().catch((error: unknown) => {
+    // Never cache a failed load: a cold start that lost a race with the file
+    // system would otherwise poison the instance for its whole lifetime.
+    pdfjs = null;
+    throw error;
+  });
+
+  return pdfjs;
+};
 
 @Injectable()
 export class TextExtractionAdapter extends TextExtractionPort {
@@ -77,7 +148,20 @@ export class TextExtractionAdapter extends TextExtractionPort {
      *
      * Loaded lazily: pdf.js is a large bundle most requests never touch.
      */
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    let pdfjs: Pdfjs;
+    try {
+      pdfjs = await loadPdfjs();
+    } catch (error) {
+      // Deliberately not folded into the parse failure below. The engine
+      // failing to load is a broken deployment, not a broken document, and
+      // telling the user their file is damaged sends them off to re-export a
+      // PDF that was never the problem.
+      this.logger.error({ err: error }, 'pdf.js failed to load');
+      throw new InvariantViolationError(
+        'source.pdf_engine_unavailable',
+        'PDFs cannot be read on this server right now — this is a server fault, not a problem with your file',
+      );
+    }
 
     let sections: ExtractedSection[];
     let title: string | null = null;

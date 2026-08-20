@@ -1,5 +1,5 @@
 /**
- * Fails if the API statically imports an ESM-only package.
+ * Fails if the API imports an ESM-only package.
  *
  * The API compiles to CommonJS, so `import x from 'pkg'` becomes
  * `require('pkg')`. Node 22.12+ permits requiring an ESM module, which means an
@@ -8,7 +8,15 @@
  * does not allow it. `p-limit@7` shipped exactly that way and crashed every
  * request on the first Vercel deploy.
  *
- * Dynamic `await import()` is fine and is not flagged; only static imports are.
+ * **`await import('pkg')` is checked too, and this is the part that bites.** It
+ * reads like an ESM import and gets recommended as the fix for exactly this
+ * problem, but TypeScript rewrites it to `require()` under a CommonJS `module`
+ * setting, so it fails in precisely the same way. `pdfjs-dist@5` was loaded that
+ * way and threw `ERR_REQUIRE_ESM` for every PDF in production while every PDF
+ * parsed locally.
+ *
+ * The safe way to load an ESM-only package from here is an import the compiler
+ * cannot rewrite — see `importModule` in `text-extraction.adapter.ts`.
  */
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -24,10 +32,29 @@ const apiSrc = join(repo, 'apps/api/src');
 // reported jose@5 as fine.
 const apiModules = join(repo, 'apps/api/node_modules');
 
-const imported = new Set(
-  execSync(`grep -rhoE "from '[a-z@][^']*'" ${apiSrc}`, { encoding: 'utf8' })
+/** `grep` exits 1 when a pattern matches nothing, which is not an error here. */
+const grep = (pattern) => {
+  try {
+    return execSync(`grep -rhoE "${pattern}" ${apiSrc}`, { encoding: 'utf8' });
+  } catch {
+    return '';
+  }
+};
+
+const specifiers = [
+  // Static: `from 'pkg'`.
+  ...grep("from '[a-z@][^']*'")
     .split('\n')
-    .map((line) => line.replace(/from '|'$/g, '').trim())
+    .map((line) => line.replace(/from '|'$/g, '')),
+  // Dynamic: `import('pkg')` — downlevelled to `require()` all the same.
+  ...grep("import\\('[a-z@][^']*'\\)")
+    .split('\n')
+    .map((line) => line.replace(/import\('|'\)$/g, '')),
+];
+
+const imported = new Set(
+  specifiers
+    .map((d) => d.trim())
     .filter(Boolean)
     .filter((d) => !d.startsWith('.') && !d.startsWith('node:') && !d.startsWith('@everlast'))
     .map((d) => (d.startsWith('@') ? d.split('/').slice(0, 2).join('/') : d.split('/')[0])),
@@ -76,6 +103,8 @@ for (const o of offenders) console.error(`    ${o}`);
 console.error(
   '\n  These work locally (Node 22.12+ allows require of ESM) but throw\n' +
     '  ERR_REQUIRE_ESM on Vercel. Replace them, pin a CJS version, or load\n' +
-    '  them with a dynamic await import().\n',
+    '  them through an import the compiler cannot rewrite into require() —\n' +
+    '  `await import()` is not that, see importModule in\n' +
+    '  apps/api/src/modules/sources/infrastructure/text-extraction.adapter.ts.\n',
 );
 process.exit(1);
