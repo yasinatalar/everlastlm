@@ -1,7 +1,7 @@
 import { setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
-import { NotebookWorkspace } from '@/components/workspace/notebook-workspace';
+import { NotebookWorkspaceLoader } from '@/components/workspace/notebook-workspace.loader';
 
 export default async function NotebookPage({
   params,
@@ -15,5 +15,5 @@ export default async function NotebookPage({
   // error; catching it here produces a proper 404 page instead.
   if (!z.uuid().safeParse(notebookId).success) notFound();
 
-  return <NotebookWorkspace notebookId={notebookId} />;
+  return <NotebookWorkspaceLoader notebookId={notebookId} />;
 }
