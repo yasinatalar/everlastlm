@@ -31,12 +31,28 @@ cp .env.example apps/web/.env.local  # keep only the NEXT_PUBLIC_* lines
 pnpm dev               # api :3001, web :3000
 ```
 
+Check the keys landed before wondering why an upload failed:
+
+```bash
+pnpm check:providers
+```
+
+It asks each provider directly and tells you what to fix. A bad key is
+otherwise only visible when a source fails to ingest.
+
 You need two API keys for the AI features:
 
 | Key                 | Used for                                    | Get one at          |
 | ------------------- | ------------------------------------------- | ------------------- |
 | `ANTHROPIC_API_KEY` | chat answers, summaries, studio artifacts   | console.anthropic.com |
-| `VOYAGE_API_KEY`    | embeddings for retrieval                    | voyageai.com        |
+| `VOYAGE_API_KEY`    | embeddings for retrieval                    | voyageai.com **or** MongoDB Atlas |
+
+> **Two sources for the embedding key.** MongoDB owns Voyage, so the same models
+> are served from two hosts, each accepting only its own credential:
+> `pa-…` keys from voyageai.com go to `api.voyageai.com`, and `al-…` keys from
+> Atlas (*AI Model APIs → Model API Keys*) go to `ai.mongodb.com`. The host is
+> chosen from the prefix automatically. Sending one to the other's host returns
+> a plain 401 that looks exactly like an expired key.
 
 Everything except answering and retrieval works without them — accounts, notebooks,
 sharing, uploads and notes are all independent of the model providers.
