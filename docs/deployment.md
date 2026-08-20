@@ -135,8 +135,8 @@ that prefix is public by definition.
 | Include files outside root | **on** |
 | Framework | Other |
 
-`apps/api/vercel.json` supplies the build command, the 60s `maxDuration`, and
-the rewrite that sends every path to the single Nest handler.
+`apps/api/vercel.json` supplies the build command, the 300s `maxDuration` (see
+above — this needs Pro), and the rewrite sending every path to the Nest handler.
 
 Environment variables (Production):
 
@@ -149,7 +149,8 @@ SUPABASE_ANON_KEY             <anon key>
 SUPABASE_SERVICE_ROLE_KEY     <service_role key>   ← secret
 ANTHROPIC_API_KEY             <key>                ← secret
 VOYAGE_API_KEY                <key>                ← secret
-TTS_PROVIDER                  none
+TTS_PROVIDER                  elevenlabs           ← or `none` for script-only
+ELEVENLABS_API_KEY            <key>                ← secret, if TTS is on
 ALLOW_PRIVATE_NETWORK_FETCH   false
 RATE_LIMIT_LIMIT              120
 RATE_LIMIT_AI_LIMIT           20
