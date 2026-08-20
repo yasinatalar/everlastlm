@@ -27,3 +27,4 @@ supabase/.branches/
 supabase/.temp/
 .vercel
 .turbo
+.env*
