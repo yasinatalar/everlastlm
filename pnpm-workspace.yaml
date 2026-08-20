@@ -1,0 +1,20 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  # Native file-watcher used by Tailwind in dev; needs its prebuild step.
+  '@parcel/watcher': true
+  # Analytics phone-home in a transitive dep — no build, no beacon.
+  '@scarf/scarf': false
+  '@swc/core': true
+
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@0.120.0'
+  - lucide-react@1.33.0
+
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - esbuild
+  - sharp
+  - unrs-resolver

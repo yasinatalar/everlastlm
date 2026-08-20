@@ -1,0 +1,234 @@
+@import 'tailwindcss';
+
+/*
+ * Everlast design tokens.
+ *
+ * Three colours carry the whole product: acid green, offwhite, anthracite.
+ * The discipline that keeps it looking like enterprise software rather than a
+ * toy is that acid green is *never* a surface and never body text — it is
+ * reserved for the single most important action or state in a view. Everything
+ * else is anthracite on offwhite (or the inverse), separated by weight and
+ * spacing rather than by colour.
+ *
+ * Acid green on offwhite fails WCAG AA for text at any reasonable size, so text
+ * that sits on an acid fill is always anthracite, and acid-on-dark text uses the
+ * lightened `--color-accent-text` variant instead.
+ */
+
+@theme {
+  --color-acid-50: #f7fee7;
+  --color-acid-100: #ecfcca;
+  --color-acid-200: #d8f7a0;
+  --color-acid-300: #c2f050;
+  --color-acid-400: #b4e824;
+  --color-acid-500: #9dcf12;
+  --color-acid-600: #7ba50c;
+  --color-acid-700: #5c7d0f;
+  --color-acid-800: #496213;
+  --color-acid-900: #3d5316;
+
+  --color-anthracite-50: #f5f6f7;
+  --color-anthracite-100: #e6e8ea;
+  --color-anthracite-200: #ced2d6;
+  --color-anthracite-300: #abb2b9;
+  --color-anthracite-400: #818b94;
+  --color-anthracite-500: #656f79;
+  --color-anthracite-600: #565e66;
+  --color-anthracite-700: #4a5057;
+  --color-anthracite-800: #33383d;
+  --color-anthracite-900: #24272b;
+  --color-anthracite-950: #16181a;
+
+  --color-offwhite: #f7f6f2;
+  --color-offwhite-raised: #fdfdfb;
+
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+  --radius-card: 0.875rem;
+
+  --shadow-panel: 0 1px 2px rgb(22 24 26 / 0.04), 0 4px 16px -8px rgb(22 24 26 / 0.12);
+  --shadow-raised: 0 2px 4px rgb(22 24 26 / 0.06), 0 12px 32px -12px rgb(22 24 26 / 0.2);
+}
+
+/*
+ * Semantic layer. Components only ever reference these, never a numbered
+ * palette entry, so re-theming is a change in one place.
+ */
+:root {
+  --background: var(--color-offwhite);
+  --surface: var(--color-offwhite-raised);
+  --surface-sunken: #eeece6;
+  --surface-hover: #eae8e2;
+
+  --foreground: var(--color-anthracite-950);
+  --foreground-muted: var(--color-anthracite-500);
+  --foreground-subtle: var(--color-anthracite-400);
+
+  --border: #dedbd3;
+  --border-strong: #c9c5bb;
+
+  --accent: var(--color-acid-300);
+  --accent-hover: var(--color-acid-400);
+  --accent-foreground: var(--color-anthracite-950);
+  /* Acid green readable as text on the light background. */
+  --accent-text: var(--color-acid-700);
+  --accent-subtle: var(--color-acid-100);
+
+  --danger: #c0392b;
+  --danger-subtle: #fdecea;
+  --warning: #a86a00;
+  --success: #2f7d32;
+
+  --ring: var(--color-acid-500);
+}
+
+.dark {
+  --background: var(--color-anthracite-950);
+  --surface: var(--color-anthracite-900);
+  --surface-sunken: #101214;
+  --surface-hover: var(--color-anthracite-800);
+
+  --foreground: #f2f1ed;
+  --foreground-muted: var(--color-anthracite-400);
+  --foreground-subtle: var(--color-anthracite-500);
+
+  --border: #2c3034;
+  --border-strong: #3d4348;
+
+  --accent: var(--color-acid-300);
+  --accent-hover: var(--color-acid-200);
+  --accent-foreground: var(--color-anthracite-950);
+  --accent-text: var(--color-acid-300);
+  --accent-subtle: #2a3312;
+
+  --danger: #f07167;
+  --danger-subtle: #35211f;
+  --warning: #e0a020;
+  --success: #6cc070;
+
+  --ring: var(--color-acid-400);
+}
+
+/* Bridge the semantic variables into Tailwind's utility namespace. */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-border-default: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One focus treatment everywhere; never removed, only restyled. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-acid-200);
+    color: var(--color-anthracite-950);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Skeleton shimmer used while notebooks and sources load. */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--surface-sunken) 25%,
+      var(--surface-hover) 37%,
+      var(--surface-sunken) 63%
+    );
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+
+  .animate-in-up {
+    animation: in-up 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes in-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
