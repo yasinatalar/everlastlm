@@ -244,9 +244,16 @@ check(
   statuses.length > 0 && statuses.every((s) => s === 'ready' || s === 'failed'),
   `statuses: ${statuses.join(', ')}`,
 );
+/**
+ * Checks for actual leakage, not for keywords. "an administrator needs to add a
+ * valid API key" is the correct message for a rejected credential — what must
+ * never appear is the vendor, the transport detail, or any part of the secret.
+ */
+const LEAKS = /voyage|anthropic|elevenlabs|supabase|sk-ant|\bpa-|\b[45]\d{2}\b|https?:\/\//i;
+
 check(
-  'failure reason is a domain phrase, not an internal error',
-  (after.body ?? []).every((s) => !s.failureReason || !/voyage|api\.|token|key/i.test(s.failureReason)),
+  'failure reason names no vendor, status code or credential',
+  (after.body ?? []).every((s) => !s.failureReason || !LEAKS.test(s.failureReason)),
   JSON.stringify((after.body ?? []).map((s) => s.failureReason)),
 );
 
