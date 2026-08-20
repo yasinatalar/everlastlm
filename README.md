@@ -143,3 +143,18 @@ address filtering and token parsing.
 The chat and studio paths need real `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` values
 to exercise end to end; without them the pipeline is verified only as far as
 "fails cleanly into a terminal state".
+
+---
+
+## License
+
+Copyright © 2026 Yasin Atalar.
+
+Licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+You may run, study, modify and redistribute this software. The one obligation
+that matters in practice is **§13**: if you offer a modified version to users
+over a network, you must also offer them its source. Self-hosting an unmodified
+copy carries no such obligation.
+
+For a license without that condition, contact the copyright holder.
