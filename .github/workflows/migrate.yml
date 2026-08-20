@@ -1,0 +1,61 @@
+name: Apply database migrations
+
+# Deliberately manual.
+#
+# Migrations are not run automatically on push: this schema carries the RLS
+# policies that are the app's authorisation boundary, and a migration that
+# half-applies during a deploy is far worse than one that runs a minute later
+# under supervision. Run this, watch it, then deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type the project ref to confirm you mean production
+        required: true
+      dry_run:
+        description: Only show what would be applied
+        type: boolean
+        default: true
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production-database
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Guard against a mistyped project
+        run: |
+          if [ "${{ inputs.confirm }}" != "${{ secrets.SUPABASE_PROJECT_REF }}" ]; then
+            echo "::error::Confirmation does not match SUPABASE_PROJECT_REF"
+            exit 1
+          fi
+
+      - name: Link project
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Show pending migrations
+        run: supabase migration list --linked
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Apply
+        if: ${{ !inputs.dry_run }}
+        run: supabase db push --linked
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { SOURCE_TRUST_BOUNDARY } from '../../../infrastructure/llm/prompt-safety';
 import { InvariantViolationError } from '../../../shared/kernel/domain-error';
+import { BackgroundTasksPort } from '../../../shared/ports/background-tasks.port';
 import { EmbeddingPort } from '../../../shared/ports/embedding.port';
 import { TextGenerationPort } from '../../../shared/ports/text-generation.port';
 import type { Source } from '../domain/source.entity';
@@ -45,15 +46,12 @@ export class IngestionService {
     private readonly extraction: TextExtractionPort,
     private readonly embeddings: EmbeddingPort,
     private readonly generation: TextGenerationPort,
+    private readonly background: BackgroundTasksPort,
   ) {}
 
   /** Schedules ingestion without blocking the caller. Never throws. */
   enqueue(source: Source, rawText?: string): void {
-    setImmediate(() => {
-      void this.run(source, rawText).catch((error: unknown) => {
-        this.logger.error({ err: error, sourceId: source.id }, 'ingestion crashed');
-      });
-    });
+    this.background.run(`ingest:${source.id}`, () => this.run(source, rawText));
   }
 
   async run(source: Source, rawText?: string): Promise<void> {

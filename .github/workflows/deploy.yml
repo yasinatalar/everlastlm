@@ -1,0 +1,140 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which project to deploy
+        type: choice
+        options: [both, web, api]
+        default: both
+
+concurrency:
+  # Never let two deploys race to production.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      api: ${{ steps.filter.outputs.api }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Written out rather than shared via a YAML anchor: merging an anchor
+          # into a sequence nests it (`[[shared...], 'apps/web/**']`) instead of
+          # flattening, and paths-filter needs a flat list of patterns.
+          # The shared entries appear in both because a change to the contracts
+          # package or the lockfile can alter either build.
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'packages/contracts/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/**'
+            api:
+              - 'apps/api/**'
+              - 'packages/contracts/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/**'
+
+  web:
+    name: Deploy web
+    needs: [verify, changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.target != 'api' ||
+      github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-web
+      url: https://everlastlm.com
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@59.1.4
+
+      # `pull` fetches the project's settings *and* its production environment
+      # variables, which is what makes the NEXT_PUBLIC_* values correct in the
+      # bundle built here rather than on Vercel.
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  api:
+    name: Deploy api
+    needs: [verify, changes]
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.target != 'web' ||
+      github.event_name == 'push' && needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-api
+      url: https://api.everlastlm.com
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@59.1.4
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      # Deploying an API whose own health check fails is worse than not
+      # deploying: it looks green while every request 500s.
+      - name: Verify deployment is healthy
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 20 https://api.everlastlm.com/health/ready | tee /dev/stderr | grep -q '"database":true'; then
+              echo "API healthy"
+              exit 0
+            fi
+            echo "attempt $attempt failed; retrying in 10s"
+            sleep 10
+          done
+          echo "::error::API did not become healthy after deploy"
+          exit 1

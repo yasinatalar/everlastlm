@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # so deploy.yml can require this before shipping
+
+concurrency:
+  # A newer push makes an in-flight run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Contracts must exist as compiled output before the apps typecheck
+      # against it — they consume `dist`, not the source.
+      - name: Build contracts
+        run: pnpm --filter @everlast/contracts build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Build-time only. `NEXT_PUBLIC_*` values are inlined into the client
+          # bundle, so this must be a real value at build time — but CI only
+          # needs the build to *succeed*, and the deployed bundles are rebuilt
+          # by Vercel with the project's own environment.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-build-only
+          NEXT_PUBLIC_API_URL: https://api.everlastlm.com
+
+  # The smoke suite needs a live Postgres + Auth + Storage stack and real
+  # provider keys, so it is not run here. Run it against a preview or staging
+  # deployment: `API_URL=https://… node scripts/smoke.mjs`.

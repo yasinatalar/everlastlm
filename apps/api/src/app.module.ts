@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_CONFIG, AppConfigModule } from './config/app-config.module';
 import type { Env } from './config/env.schema';
 import { LlmModule } from './infrastructure/llm/llm.module';
+import { RuntimeModule } from './infrastructure/runtime/runtime.module';
 import { SupabaseModule } from './infrastructure/supabase/supabase.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { IamModule } from './modules/iam/iam.module';
@@ -68,6 +69,7 @@ import { UserAwareThrottlerGuard, skipUnlessAiRoute } from './shared/security/th
       }),
     }),
 
+    RuntimeModule,
     SupabaseModule,
     SecurityModule,
     LlmModule,

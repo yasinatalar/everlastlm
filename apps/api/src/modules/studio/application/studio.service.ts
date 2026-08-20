@@ -10,6 +10,7 @@ import {
   InvariantViolationError,
   NotFoundError,
 } from '../../../shared/kernel/domain-error';
+import { BackgroundTasksPort } from '../../../shared/ports/background-tasks.port';
 import { SpeechSynthesisPort } from '../../../shared/ports/speech.port';
 import { TextGenerationPort } from '../../../shared/ports/text-generation.port';
 import { AuditService } from '../../../shared/security/audit.service';
@@ -32,6 +33,7 @@ export class StudioService {
     private readonly speech: SpeechSynthesisPort,
     private readonly audioStorage: StudioAudioStoragePort,
     private readonly audit: AuditService,
+    private readonly background: BackgroundTasksPort,
   ) {}
 
   async list(notebookId: string): Promise<StudioArtifact[]> {
@@ -96,11 +98,9 @@ export class StudioService {
       metadata: { kind: input.kind, sources: selected.length },
     });
 
-    setImmediate(() => {
-      void this.run(notebookId, artifact.id, input).catch((error: unknown) => {
-        this.logger.error({ err: error, artifactId: artifact.id }, 'studio generation crashed');
-      });
-    });
+    this.background.run(`studio:${artifact.id}`, () =>
+      this.run(notebookId, artifact.id, input),
+    );
 
     return artifact;
   }
