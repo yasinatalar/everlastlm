@@ -79,6 +79,26 @@ jobs:
         # on GitHub runners, so the installed binary is unreachable.
         run: npm install -g vercel@59.1.4
 
+      # An unset secret expands to an empty string, so `--token=` reaches the
+      # CLI as a flag with no value and it fails with "You defined --token, but
+      # it's missing a value" — which reads like a CLI bug rather than a missing
+      # secret, and says nothing about which one. Name it instead.
+      - name: Check deploy credentials
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${VERCEL_TOKEN:-}" ] || missing+=("VERCEL_TOKEN")
+          [ -n "${VERCEL_ORG_ID:-}" ] || missing+=("VERCEL_ORG_ID")
+          [ -n "${VERCEL_PROJECT_ID:-}" ] || missing+=("VERCEL_PROJECT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repository secret(s): ${missing[*]}."
+            echo "Add them under Settings → Secrets and variables → Actions."
+            echo "A Vercel token comes from Account Settings → Tokens."
+            exit 1
+          fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
       # `pull` fetches the project's settings *and* its production environment
       # variables, which is what makes the NEXT_PUBLIC_* values correct in the
       # bundle built here rather than on Vercel.
@@ -135,6 +155,26 @@ jobs:
         # npm, not `pnpm add -g`: pnpm's global bin directory is not on PATH
         # on GitHub runners, so the installed binary is unreachable.
         run: npm install -g vercel@59.1.4
+
+      # An unset secret expands to an empty string, so `--token=` reaches the
+      # CLI as a flag with no value and it fails with "You defined --token, but
+      # it's missing a value" — which reads like a CLI bug rather than a missing
+      # secret, and says nothing about which one. Name it instead.
+      - name: Check deploy credentials
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${VERCEL_TOKEN:-}" ] || missing+=("VERCEL_TOKEN")
+          [ -n "${VERCEL_ORG_ID:-}" ] || missing+=("VERCEL_ORG_ID")
+          [ -n "${VERCEL_PROJECT_ID:-}" ] || missing+=("VERCEL_PROJECT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repository secret(s): ${missing[*]}."
+            echo "Add them under Settings → Secrets and variables → Actions."
+            echo "A Vercel token comes from Account Settings → Tokens."
+            exit 1
+          fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
