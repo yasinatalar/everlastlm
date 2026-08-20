@@ -16,6 +16,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "check:providers": "node scripts/check-providers.mjs",
+    "check:esm": "node scripts/check-esm.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md,css}\"",
     "db:start": "supabase start",

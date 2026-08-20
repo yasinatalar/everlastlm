@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import pLimit from 'p-limit';
 import { request } from 'undici';
+import { mapWithConcurrency } from '../../shared/kernel/concurrency';
 import { APP_CONFIG } from '../../config/app-config.module';
 import type { Env } from '../../config/env.schema';
 import { DependencyFailureError } from '../../shared/kernel/domain-error';
@@ -37,9 +37,10 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
     // ElevenLabs caps concurrent requests by plan — 2 on the free tier. A
     // dialogue is one request per turn, so exceeding the cap makes a 20-turn
     // overview fail on a limit rather than on anything to do with the content.
-    const limit = pLimit(this.config.ELEVENLABS_MAX_CONCURRENCY);
-    const clips = await Promise.all(
-      turns.map((turn) => limit(() => this.synthesiseTurn(turn))),
+    const clips = await mapWithConcurrency(
+      turns,
+      this.config.ELEVENLABS_MAX_CONCURRENCY,
+      (turn) => this.synthesiseTurn(turn),
     );
 
     const words = turns.reduce((total, turn) => total + turn.text.split(/\s+/).length, 0);

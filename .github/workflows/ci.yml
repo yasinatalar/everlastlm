@@ -35,6 +35,12 @@ jobs:
       - name: Build contracts
         run: pnpm --filter @everlast/contracts build
 
+      # Catches an ESM-only dependency reaching the CommonJS API build. It
+      # passes locally either way — Node allows require() of ESM — and then
+      # throws ERR_REQUIRE_ESM on every request in production.
+      - name: Check for ESM-only dependencies
+        run: pnpm check:esm
+
       - name: Typecheck
         run: pnpm typecheck
 
