@@ -72,9 +72,22 @@ Then in **Authentication → URL Configuration**:
 > Add `http://localhost:3000/auth/callback` too if you want the same project to
 > serve local development. Prefer a separate project for that.
 
-In **Authentication → Providers → Email**, keep *Confirm email* on, and
-configure real SMTP under **Project Settings → Auth → SMTP**. Supabase's
-built-in sender is rate-limited and explicitly not for production.
+In **Authentication → Providers → Email**, keep *Confirm email* on.
+
+**Configure custom SMTP before you test signup**, under Project Settings → Auth
+→ SMTP. This is not a nicety — Supabase's built-in sender has two limits that
+look exactly like a broken app:
+
+- It **only delivers to addresses on your project's team**. Sign up with any
+  other address and no mail is sent, with no error surfaced anywhere.
+- It is capped at **2 messages per hour**, with no delivery SLA.
+
+Supabase documents it as being for demos and template testing only. Any SMTP
+provider works — Resend, Postmark, SES, or your own mail server.
+
+> Note that this is separate from local development, where **no** mail ever
+> leaves the machine: `supabase start` captures it in Mailpit at
+> http://127.0.0.1:54324 regardless of SMTP settings.
 
 Grab from **Project Settings → API**: the Project URL, the `anon` key, and the
 `service_role` key.

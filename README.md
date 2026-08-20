@@ -60,11 +60,17 @@ sharing, uploads and notes are all independent of the model providers.
 `TTS_PROVIDER=elevenlabs` additionally enables spoken audio overviews; with the
 default `none`, an audio overview is still generated but stored as a script.
 
-### Local email
+### Email
 
-Local Supabase never sends real mail. Signup confirmations, invites and password
-resets are captured by **Mailpit at http://127.0.0.1:54324** — open it and click
-the link there. Waiting on your real inbox will not work.
+**Locally, no mail ever leaves the machine.** Signup confirmations, invites and
+password resets are captured by **Mailpit at http://127.0.0.1:54324** — open it
+and click the link there. Waiting on your real inbox will not work, whatever
+SMTP is configured.
+
+**On a hosted project without custom SMTP**, Supabase's built-in sender only
+delivers to addresses on your project's team, and only 2 per hour. Signing up
+with any other address sends nothing and reports no error. Configure SMTP under
+Project Settings → Auth → SMTP before testing signup.
 
 To skip confirmation while developing, set `enable_confirmations = false` under
 `[auth.email]` in `supabase/config.toml`, then `pnpm db:stop && pnpm db:start`.
