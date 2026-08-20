@@ -236,8 +236,20 @@ check('promoted editor can add a source', editorWrite.status === 201, `got ${edi
 console.log('\n== ingestion pipeline ==');
 // The Voyage key is a placeholder, so embedding must fail *gracefully* — the
 // source should reach a terminal `failed` state rather than hang in `pending`.
-await new Promise((resolve) => setTimeout(resolve, 6000));
-const after = await api(tokenA, `/notebooks/${notebookId}/sources`);
+/**
+ * Polls rather than sleeping a fixed interval: embedding requests are paced to
+ * VOYAGE_MAX_RPM (3 by default, i.e. one every 20s), so a fixed short wait
+ * reports "stuck" for a pipeline that is merely being polite to a rate limit.
+ */
+let after = await api(tokenA, `/notebooks/${notebookId}/sources`);
+for (let attempt = 0; attempt < 30; attempt += 1) {
+  const pending = (after.body ?? []).filter(
+    (s) => s.status !== 'ready' && s.status !== 'failed',
+  );
+  if (pending.length === 0) break;
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  after = await api(tokenA, `/notebooks/${notebookId}/sources`);
+}
 const statuses = (after.body ?? []).map((s) => s.status);
 check(
   'ingestion reaches a terminal state (no stuck sources)',

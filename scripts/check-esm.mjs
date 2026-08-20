@@ -11,13 +11,18 @@
  * Dynamic `await import()` is fine and is not flagged; only static imports are.
  */
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const apiSrc = join(repo, 'apps/api/src');
-const store = join(repo, 'node_modules/.pnpm');
+// Resolve through the API package's own node_modules, not the global store:
+// pnpm keeps many versions of a package side by side, and picking the first
+// match in .pnpm can report a transitive copy rather than the one the API
+// actually loads. That mistake let jose@6 (ESM-only) through while the checker
+// reported jose@5 as fine.
+const apiModules = join(repo, 'apps/api/node_modules');
 
 const imported = new Set(
   execSync(`grep -rhoE "from '[a-z@][^']*'" ${apiSrc}`, { encoding: 'utf8' })
@@ -28,22 +33,31 @@ const imported = new Set(
     .map((d) => (d.startsWith('@') ? d.split('/').slice(0, 2).join('/') : d.split('/')[0])),
 );
 
-const dirs = readdirSync(store);
 const offenders = [];
 const unresolved = [];
 
 for (const pkg of [...imported].sort()) {
-  const hit = dirs.find((d) => d.startsWith(`${pkg.replace('/', '+')}@`));
-  const manifest = hit && join(store, hit, 'node_modules', pkg, 'package.json');
+  const manifest = join(apiModules, pkg, 'package.json');
 
-  if (!manifest || !existsSync(manifest)) {
+  if (!existsSync(manifest)) {
     unresolved.push(pkg);
     continue;
   }
 
   const pj = JSON.parse(readFileSync(manifest, 'utf8'));
   const exportsBlob = JSON.stringify(pj.exports ?? '');
-  const esmOnly = pj.type === 'module' && !exportsBlob.includes('require') && !pj.main;
+
+  // A package is requireable only if it offers a CommonJS entry point: either a
+  // `require` condition in `exports`, or a `.cjs` main. Declaring `main` alone
+  // proves nothing — jose@6 sets `"type": "module"` *and* points `main` at an
+  // ESM file, which an earlier version of this check read as safe.
+  //
+  // Do not "verify" by calling require() here either: Node 22.12+ permits
+  // requiring an ES module, so it succeeds locally for exactly the packages
+  // that fail in production.
+  const hasCjsEntry =
+    exportsBlob.includes('"require"') || Boolean(pj.main && pj.main.endsWith('.cjs'));
+  const esmOnly = pj.type === 'module' && !hasCjsEntry;
 
   if (esmOnly) offenders.push(`${pkg}@${pj.version}`);
 }
