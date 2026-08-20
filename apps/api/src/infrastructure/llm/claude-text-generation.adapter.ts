@@ -9,7 +9,43 @@ import {
   TextGenerationPort,
   type GenerationOptions,
 } from '../../shared/ports/text-generation.port';
-import { AnthropicClient } from './anthropic.client';
+import { AnthropicClient, supportsAdaptiveThinking } from './anthropic.client';
+
+/**
+ * Constraint keywords the structured-output schema validator rejects.
+ *
+ * `z.array(x).max(8)` emits `maxItems`, and the API answers
+ * "For 'array' type, property 'maxItems' is not supported" — a 400 that, in a
+ * best-effort code path, silently disables the feature instead of failing
+ * loudly. Every source summary was being skipped this way.
+ *
+ * Stripping them costs nothing: the response is parsed with the original Zod
+ * schema afterwards, so the constraints are still enforced — just by us rather
+ * than by the model's decoder.
+ */
+const UNSUPPORTED_SCHEMA_KEYWORDS = [
+  'minItems',
+  'maxItems',
+  'uniqueItems',
+  'minLength',
+  'maxLength',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+] as const;
+
+export const stripUnsupportedKeywords = (schema: unknown): unknown => {
+  if (Array.isArray(schema)) return schema.map(stripUnsupportedKeywords);
+  if (!schema || typeof schema !== 'object') return schema;
+
+  return Object.fromEntries(
+    Object.entries(schema as Record<string, unknown>)
+      .filter(([key]) => !UNSUPPORTED_SCHEMA_KEYWORDS.includes(key as never))
+      .map(([key, value]) => [key, stripUnsupportedKeywords(value)]),
+  );
+};
 
 @Injectable()
 export class ClaudeTextGenerationAdapter extends TextGenerationPort {
@@ -46,10 +82,9 @@ export class ClaudeTextGenerationAdapter extends TextGenerationPort {
   ): Promise<z.infer<T>> {
     const message = await this.send(system, userContent, options, {
       type: 'json_schema',
-      schema: z.toJSONSchema(schema, { target: 'draft-7', io: 'output' }) as Record<
-        string,
-        unknown
-      >,
+      schema: stripUnsupportedKeywords(
+        z.toJSONSchema(schema, { target: 'draft-7', io: 'output' }),
+      ) as Record<string, unknown>,
     });
 
     const text = message.content
@@ -82,14 +117,17 @@ export class ClaudeTextGenerationAdapter extends TextGenerationPort {
     format?: { type: 'json_schema'; schema: Record<string, unknown> },
   ): Promise<Anthropic.Message> {
     const maxTokens = options.maxTokens ?? 16_000;
+    const model = this.anthropic.modelFor(options.tier);
 
     try {
       // Streaming avoids HTTP timeouts on the long studio generations; the
       // helper still hands back one complete message.
       const stream = this.anthropic.sdk.messages.stream({
-        model: this.anthropic.modelFor(options.tier),
+        model,
         max_tokens: maxTokens,
-        thinking: { type: 'adaptive' },
+        // Omitted entirely on models that predate adaptive thinking — sending
+        // it there is a hard 400, not a silently ignored parameter.
+        ...(supportsAdaptiveThinking(model) ? { thinking: { type: 'adaptive' as const } } : {}),
         ...(format ? { output_config: { format } } : {}),
         system: options.cacheSystemPrompt
           ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]

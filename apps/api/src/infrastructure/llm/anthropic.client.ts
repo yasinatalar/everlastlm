@@ -27,3 +27,20 @@ export class AnthropicClient {
     return tier === 'utility' ? this.utilityModel : this.primaryModel;
   }
 }
+
+/**
+ * Whether a model accepts `thinking: {type: 'adaptive'}`.
+ *
+ * Sending it to a model that does not returns
+ * `400 adaptive thinking is not supported on this model`. That matters here
+ * because the utility tier runs a cheaper, older model than the primary tier —
+ * so a single hardcoded `thinking` block works for chat and breaks every
+ * summary and conversation title, which are best-effort and swallow the error.
+ *
+ * Adaptive thinking arrived with the 4.6 generation. Haiku 4.5 and anything
+ * older predate it.
+ */
+export const supportsAdaptiveThinking = (model: string): boolean =>
+  /^claude-(fable|mythos)-\d/.test(model) ||
+  /^claude-opus-(4-[6-9]|[5-9])/.test(model) ||
+  /^claude-sonnet-(4-[6-9]|[5-9])/.test(model);

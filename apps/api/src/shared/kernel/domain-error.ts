@@ -97,6 +97,27 @@ export class DependencyFailureError extends DomainError {
  * succeed, which is exactly how a missing API key gets mistaken for a bug in
  * the document they uploaded.
  */
+/**
+ * An upstream dependency is rate-limiting us and retrying did not clear it.
+ *
+ * Distinct from both siblings: the credentials are fine and the service is up,
+ * so "not configured" is wrong and "try again" is only true on a horizon far
+ * longer than a user will wait. Usually a quota or plan ceiling, which only an
+ * operator can lift.
+ */
+export class DependencyRateLimitedError extends DomainError {
+  readonly code: string;
+
+  constructor(
+    readonly dependency: string,
+    /** Seconds until the limit should clear, when the service tells us. */
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(`${dependency} is rate limiting this account`);
+    this.code = `dependency.${dependency}_rate_limited`;
+  }
+}
+
 export class DependencyNotConfiguredError extends DomainError {
   readonly code: string;
 

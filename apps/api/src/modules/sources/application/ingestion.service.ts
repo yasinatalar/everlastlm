@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { SOURCE_TRUST_BOUNDARY } from '../../../infrastructure/llm/prompt-safety';
 import {
   DependencyNotConfiguredError,
+  DependencyRateLimitedError,
   InvariantViolationError,
 } from '../../../shared/kernel/domain-error';
 import { BackgroundTasksPort } from '../../../shared/ports/background-tasks.port';
@@ -118,7 +119,9 @@ export class IngestionService {
           ? error.message
           : error instanceof DependencyNotConfiguredError
             ? 'the AI service is not configured on this server — an administrator needs to add a valid API key'
-            : 'this source could not be processed — please try again';
+            : error instanceof DependencyRateLimitedError
+              ? 'the embedding service is rate limiting this account — add a payment method to lift the free-tier limit, or add fewer sources at once'
+              : 'this source could not be processed — please try again';
       this.logger.error({ err: error, sourceId: source.id }, 'ingestion failed');
 
       source.markFailed(reason);

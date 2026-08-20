@@ -14,6 +14,7 @@ import {
   ConflictError,
   DependencyFailureError,
   DependencyNotConfiguredError,
+  DependencyRateLimitedError,
   DomainError,
   ForbiddenError,
   InvariantViolationError,
@@ -106,6 +107,7 @@ const statusFor = (error: DomainError): number => {
   if (error instanceof InvariantViolationError) return HttpStatus.BAD_REQUEST;
   // 503 rather than 502: the dependency answered, we are the ones misconfigured.
   if (error instanceof DependencyNotConfiguredError) return HttpStatus.SERVICE_UNAVAILABLE;
+  if (error instanceof DependencyRateLimitedError) return HttpStatus.TOO_MANY_REQUESTS;
   if (error instanceof DependencyFailureError) return HttpStatus.BAD_GATEWAY;
   return HttpStatus.INTERNAL_SERVER_ERROR;
 };

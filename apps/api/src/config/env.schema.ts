@@ -61,6 +61,15 @@ export const envSchema = z.object({
    * override that — a proxy, or a new prefix we do not recognise yet.
    */
   VOYAGE_BASE_URL: optional(z.url()),
+  /**
+   * Requests per minute we allow ourselves, used to space our own calls.
+   *
+   * Defaults to 3 because that is the ceiling on a Voyage/Atlas account with no
+   * payment method — a limit that is easy to be on without knowing, and which
+   * presents as documents failing to ingest. Raise it once billing is set up
+   * (paid tiers start around 300 RPM) or ingestion will be needlessly slow.
+   */
+  VOYAGE_MAX_RPM: z.coerce.number().int().min(1).max(2000).default(3),
 
   /** Audio overviews need a TTS vendor; `none` renders script-only. */
   TTS_PROVIDER: z.enum(['none', 'elevenlabs']).default('none'),

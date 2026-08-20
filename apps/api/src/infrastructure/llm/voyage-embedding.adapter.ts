@@ -5,6 +5,7 @@ import type { Env } from '../../config/env.schema';
 import {
   DependencyFailureError,
   DependencyNotConfiguredError,
+  DependencyRateLimitedError,
 } from '../../shared/kernel/domain-error';
 import { EmbeddingPort } from '../../shared/ports/embedding.port';
 
@@ -41,6 +42,7 @@ interface VoyageResponse {
 export class VoyageEmbeddingAdapter extends EmbeddingPort {
   private readonly logger = new Logger(VoyageEmbeddingAdapter.name);
   private readonly endpoint: string;
+  private readonly minIntervalMs: number;
   readonly dimensions: number;
 
   constructor(@Inject(APP_CONFIG) private readonly config: Env) {
@@ -49,6 +51,9 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
 
     const baseUrl = resolveVoyageBaseUrl(config.VOYAGE_API_KEY, config.VOYAGE_BASE_URL);
     this.endpoint = `${baseUrl}/embeddings`;
+    // 60s / requests-per-minute. Defaults to the free-tier ceiling of 3 RPM,
+    // because that is the setting people hit without knowing they have it.
+    this.minIntervalMs = Math.ceil(60_000 / Math.max(config.VOYAGE_MAX_RPM, 1));
 
     // Logged at startup so a credential/host mismatch is visible before the
     // first upload fails, rather than as a 401 buried in an ingestion run.
@@ -87,6 +92,12 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
       truncation: true,
     });
 
+    // Self-pacing. A Voyage account without a payment method is capped at
+    // 3 requests/minute; firing batches back to back guarantees a 429 that no
+    // amount of retrying fixes. Spacing our own calls keeps a multi-chunk
+    // document under the ceiling instead of racing into it.
+    await this.pace();
+
     const response = await this.withRetry(async () => {
       const res = await request(this.endpoint, {
         method: 'POST',
@@ -108,11 +119,20 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
         throw new DependencyNotConfiguredError('voyage');
       }
 
+      if (res.statusCode === 429) {
+        const header = res.headers['retry-after'];
+        const retryAfter = Number(Array.isArray(header) ? header[0] : header);
+        throw new EmbeddingHttpError(
+          `voyage responded 429: ${payload.detail ?? 'rate limited'}`,
+          true,
+          Number.isFinite(retryAfter) ? retryAfter : undefined,
+        );
+      }
+
       if (res.statusCode >= 400) {
-        const retryable = res.statusCode === 429 || res.statusCode >= 500;
         throw new EmbeddingHttpError(
           `voyage responded ${res.statusCode}: ${payload.detail ?? 'unknown error'}`,
-          retryable,
+          res.statusCode >= 500,
         );
       }
       return payload;
@@ -141,7 +161,26 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
     return ordered;
   }
 
-  private async withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  /**
+   * Ensures a minimum gap between our own requests.
+   *
+   * Serialised through a promise chain rather than a timestamp check so that
+   * concurrent ingestions queue behind one another instead of all seeing the
+   * same "last call" and firing together.
+   */
+  private gate: Promise<void> = Promise.resolve();
+  private lastCallAt = 0;
+
+  private pace(): Promise<void> {
+    this.gate = this.gate.then(async () => {
+      const wait = this.minIntervalMs - (Date.now() - this.lastCallAt);
+      if (wait > 0) await sleep(wait);
+      this.lastCallAt = Date.now();
+    });
+    return this.gate;
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -153,13 +192,34 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
         if (error instanceof DependencyNotConfiguredError) throw error;
 
         lastError = error;
-        const retryable = !(error instanceof EmbeddingHttpError) || error.retryable;
+        const http = error instanceof EmbeddingHttpError ? error : null;
+        const retryable = !http || http.retryable;
         if (!retryable || attempt === attempts) break;
 
-        const backoffMs = 2 ** attempt * 250 + Math.floor(Math.random() * 200);
-        this.logger.warn(`voyage attempt ${attempt} failed, retrying in ${backoffMs}ms`);
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        /**
+         * A 429 from a per-minute quota needs to be waited out in seconds, not
+         * milliseconds. The previous 0.5s/1s/2s ladder guaranteed that all
+         * three attempts landed inside the same rate-limit window and the
+         * request failed anyway.
+         */
+        const backoffMs = http?.retryAfterSeconds
+          ? http.retryAfterSeconds * 1000
+          : http?.rateLimited
+            ? Math.min(this.minIntervalMs * attempt, 60_000)
+            : 2 ** attempt * 250;
+
+        const jittered = backoffMs + Math.floor(Math.random() * 250);
+        this.logger.warn(
+          `voyage attempt ${attempt}/${attempts} failed, retrying in ${Math.round(jittered / 1000)}s`,
+        );
+        await sleep(jittered);
       }
+    }
+
+    if (lastError instanceof EmbeddingHttpError && lastError.rateLimited) {
+      // Distinct from a generic failure: retrying already happened and the
+      // quota did not clear, so this needs an operator, not another attempt.
+      throw new DependencyRateLimitedError('voyage', lastError.retryAfterSeconds);
     }
 
     throw new DependencyFailureError(
@@ -169,11 +229,21 @@ export class VoyageEmbeddingAdapter extends EmbeddingPort {
   }
 }
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 class EmbeddingHttpError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    /** Present when the service told us how long to wait. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
+  }
+
+  /** A 429 needs a different backoff shape from a 5xx. */
+  get rateLimited(): boolean {
+    return this.message.includes('429');
   }
 }
