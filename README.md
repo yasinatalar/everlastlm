@@ -1,10 +1,16 @@
 # Everlast
 
-A NotebookLM-style research workspace: upload your sources, ask questions, and get
-answers grounded in those sources with citations you can click back to the exact
-passage.
+**Think with your sources.** Upload your documents, ask questions, and get answers
+grounded in what you uploaded — every claim linked back to the exact passage it
+came from.
 
-**everlastlm.com**
+**[everlastlm.com](https://everlastlm.com)**
+
+![Asking a question in Everlast and checking the citation behind the answer](docs/media/everlast-demo.gif)
+
+<sub>A notebook holding three chapters of Darwin's _On the Origin of Species_.
+The question is answered from those chapters only, and every marker in the answer
+opens the passage it came from.</sub>
 
 - **Frontend** — Next.js 16 (App Router, React 19), Tailwind v4, next-intl (EN/DE),
   light & dark themes
@@ -12,6 +18,24 @@ passage.
 - **Data** — Supabase (Postgres 17 + pgvector + Storage + Auth), row level security
   on every table
 - **AI** — Claude for answering and generation, Voyage for embeddings
+
+---
+
+## What it does
+
+- **Notebooks.** One workspace per topic: sources on the left, chat in the middle,
+  studio on the right — what I have · what I ask · what I make.
+- **Sources.** Upload PDF, DOCX, Markdown or plain text (up to 50 MB each), paste a
+  passage, or give a URL and Everlast fetches and extracts it. Up to 300 per
+  notebook.
+- **Answers you can check.** Retrieval runs over the sources you have selected, and
+  nothing else. The answer streams in with citation markers; hovering one shows the
+  source and the quoted passage behind it.
+- **Studio.** Turn a notebook into an audio overview (two hosts, spoken aloud when
+  a TTS key is configured), a study guide, a briefing doc, an FAQ or a timeline.
+- **Notes.** Save an answer to notes, or write your own.
+- **Sharing.** Invite by email as viewer or editor. Someone without an account gets
+  an invitation that signs them in and asks for a password.
 
 ---
 
@@ -42,15 +66,15 @@ otherwise only visible when a source fails to ingest.
 
 You need two API keys for the AI features:
 
-| Key                 | Used for                                    | Get one at          |
-| ------------------- | ------------------------------------------- | ------------------- |
-| `ANTHROPIC_API_KEY` | chat answers, summaries, studio artifacts   | console.anthropic.com |
-| `VOYAGE_API_KEY`    | embeddings for retrieval                    | voyageai.com **or** MongoDB Atlas |
+| Key                 | Used for                                  | Get one at                        |
+| ------------------- | ----------------------------------------- | --------------------------------- |
+| `ANTHROPIC_API_KEY` | chat answers, summaries, studio artifacts | console.anthropic.com             |
+| `VOYAGE_API_KEY`    | embeddings for retrieval                  | voyageai.com **or** MongoDB Atlas |
 
 > **Two sources for the embedding key.** MongoDB owns Voyage, so the same models
 > are served from two hosts, each accepting only its own credential:
 > `pa-…` keys from voyageai.com go to `api.voyageai.com`, and `al-…` keys from
-> Atlas (*AI Model APIs → Model API Keys*) go to `ai.mongodb.com`. The host is
+> Atlas (_AI Model APIs → Model API Keys_) go to `ai.mongodb.com`. The host is
 > chosen from the prefix automatically. Sending one to the other's host returns
 > a plain 401 that looks exactly like an expired key.
 
@@ -84,14 +108,14 @@ Keep it enabled anywhere deployed.
 
 ### Commands
 
-| Command           | Does                                              |
-| ----------------- | ------------------------------------------------- |
-| `pnpm dev`        | Run API and web together                          |
-| `pnpm build`      | Build contracts → API → web                       |
-| `pnpm typecheck`  | Typecheck every workspace                         |
-| `pnpm test`       | Run all unit tests                                |
-| `pnpm db:reset`   | Drop, recreate and re-migrate the local database  |
-| `pnpm db:push`    | Apply migrations to the linked hosted project     |
+| Command          | Does                                             |
+| ---------------- | ------------------------------------------------ |
+| `pnpm dev`       | Run API and web together                         |
+| `pnpm build`     | Build contracts → API → web                      |
+| `pnpm typecheck` | Typecheck every workspace                        |
+| `pnpm test`      | Run all unit tests                               |
+| `pnpm db:reset`  | Drop, recreate and re-migrate the local database |
+| `pnpm db:push`   | Apply migrations to the linked hosted project    |
 
 ---
 
@@ -127,6 +151,8 @@ lookup.
    answer always points at the passage the model actually used — not at a
    post-hoc string match.
 
+![A citation marker opened to show the source it came from and the passage quoted from it](docs/media/everlast-citation.png)
+
 ---
 
 ## Repository layout
@@ -148,24 +174,25 @@ apps/
 packages/
   contracts/                  Zod schemas shared by both apps
 supabase/migrations/          schema, RLS, retrieval, storage, grants
-docs/                         domain model and security notes
+docs/                         domain model, security and deployment notes
 ```
 
 The dependency rule runs one way: `presentation → application → domain`, with
 `infrastructure` implementing ports the domain declares. The domain layer imports
 nothing from NestJS or Supabase, which is what makes it testable without either.
 
-See [`docs/domain-model.md`](docs/domain-model.md) for the ubiquitous language and
-[`docs/security.md`](docs/security.md) for the threat model.
+See [`docs/domain-model.md`](docs/domain-model.md) for the ubiquitous language,
+[`docs/security.md`](docs/security.md) for the threat model, and
+[`docs/deployment.md`](docs/deployment.md) for hosting it on Supabase and Vercel.
 
 ---
 
 ## Verified
 
-Run against a live local Supabase (`scripts/smoke.mjs`, 47 checks): authentication
+Run against a live local Supabase (`scripts/smoke.mjs`, 49 checks): authentication
 rejection paths, cross-tenant isolation, role enforcement across owner/editor/
 viewer, SSRF blocking, duplicate detection, ingestion failure handling, inviting
-an address that has no account, and the ownership invariants. Plus 84 unit tests
+an address that has no account, and the ownership invariants. Plus 90 unit tests
 covering chunking, citation mapping, address filtering and token parsing.
 
 The chat and studio paths need real `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` values
