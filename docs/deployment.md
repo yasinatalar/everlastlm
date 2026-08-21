@@ -145,6 +145,23 @@ All three are `NEXT_PUBLIC_*`, meaning they are **inlined into the browser
 bundle at build time**. Never put the `service_role` key here — anything with
 that prefix is public by definition.
 
+**Do not mark these three Sensitive, and do not build this project outside
+Vercel.** A Sensitive variable in Vercel is write-only: the dashboard will not
+show it again and `vercel pull` will not return it. That is harmless for a
+value read at runtime — which is why every variable on the api project can be
+Sensitive — but a `NEXT_PUBLIC_*` value is needed by the *build*. Build
+somewhere that cannot read them and `next build` inlines empty strings, the
+deploy reports success, and every page then 500s at runtime with:
+
+```
+Error: Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.
+```
+
+This is why `deploy.yml` builds the web project on Vercel (`vercel deploy
+--prod`) while the api project is prebuilt on the runner (`vercel build` +
+`vercel deploy --prebuilt`). The asymmetry is deliberate; do not "tidy" it up
+without making the variables readable first.
+
 ### everlastlm-api
 
 | Setting                    | Value      |

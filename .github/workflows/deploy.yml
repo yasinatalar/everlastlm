@@ -119,28 +119,42 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
-      # `pull` fetches the project's settings *and* its production environment
-      # variables, which is what makes the NEXT_PUBLIC_* values correct in the
-      # bundle built here rather than on Vercel.
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
+      # Built on Vercel, NOT here — no `vercel pull` + `vercel build` +
+      # `--prebuilt` for this project.
+      #
+      # `NEXT_PUBLIC_*` values are inlined into the client bundle at build
+      # time, so the build needs them. All three of this project's are typed
+      # **Sensitive** in Vercel, and a Sensitive variable is write-only: the
+      # dashboard will not show it and `vercel pull` will not return it. A
+      # build on this runner therefore inlines empty strings, and every page
+      # 500s at runtime with:
+      #
+      #   Error: Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.
+      #
+      # while the deploy step still reports success. Production ran that way
+      # until it was caught by hand. A remote build runs where the values
+      # actually exist. To move the build back here, the three variables have
+      # to stop being Sensitive first — which means re-entering their values.
       - name: Deploy
         id: deploy
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})"
+          url="$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }})"
           echo "url=${url}" >> "$GITHUB_OUTPUT"
           echo "Deployed to ${url}"
 
+      # Checks the production domain, not `steps.deploy.outputs.url`.
+      #
+      # Deployment Protection answers the deployment URL with a 302 to
+      # vercel.com/sso-api, and `curl -L` follows that to a perfectly healthy
+      # 200 — which is how this step went green against a deployment whose
+      # every page was a 500. The apex domain has no such redirect, and it is
+      # what a user actually loads.
       - name: Verify the app responds
         run: |
           set -uo pipefail
-          url="${{ steps.deploy.outputs.url }}"
-          for attempt in 1 2 3; do
+          url="https://everlastlm.com"
+          for attempt in 1 2 3 4 5; do
             code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -L "${url}/login" || true)"
             echo "  ${url}/login -> ${code}"
             [ "${code}" = "200" ] && exit 0
