@@ -52,6 +52,26 @@ jobs:
               - 'package.json'
               - '.github/workflows/**'
 
+      # A push touching none of those paths skips *both* deploy jobs — and a
+      # run whose only remaining jobs are skipped still reports green. So a
+      # tick on this workflow does not mean anything shipped, which is exactly
+      # how an empty commit pushed to force a deploy comes back "successful"
+      # having deployed nothing. `docs/**` is not a deployable path either.
+      #
+      # Say it out loud instead of leaving it to be inferred from two jobs that
+      # took 0s. To deploy when nothing under these paths changed, use Run
+      # workflow (the workflow_dispatch above) — it bypasses this filter.
+      - name: Report what will deploy
+        env:
+          WEB: ${{ steps.filter.outputs.web }}
+          API: ${{ steps.filter.outputs.api }}
+        run: |
+          echo "web: ${WEB}"
+          echo "api: ${API}"
+          if [ "${WEB}" != "true" ] && [ "${API}" != "true" ]; then
+            echo "::warning::Nothing deployable changed — both deploy jobs will be skipped and this run will still report success. Use Run workflow to force a deploy."
+          fi
+
   web:
     name: Deploy web
     needs: [verify, changes]

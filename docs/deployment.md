@@ -263,6 +263,21 @@ Since deploys go through Actions, turn **off** the Vercel Git integration's
 automatic production deploys on both projects (Settings → Git → Ignored Build
 Step, or disconnect Git) so the two do not race.
 
+**A green `deploy.yml` run does not mean anything shipped.** It deploys only
+the projects whose files changed — `apps/web/**`, `apps/api/**`,
+`packages/contracts/**`, the lockfiles, `package.json`, `.github/workflows/**`.
+A push touching nothing on that list skips both deploy jobs, and a run whose
+only remaining jobs are skipped still reports success. Two traps follow from
+it: `docs/**` is not a deployable path, and pushing an empty commit to force a
+deploy always comes back green having deployed nothing. The `Detect changes`
+job now prints what it will ship and warns when the answer is nothing.
+
+To deploy when nothing under those paths changed, use **Actions → Deploy → Run
+workflow** and pick a target — `workflow_dispatch` ignores the path filter.
+That needs admin rights on the repository; a collaborator without them gets
+`Must have admin rights to Repository` from both the API and `gh`, and pushing
+is then the only trigger available to them.
+
 ---
 
 ## 5. Verify
