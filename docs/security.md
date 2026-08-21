@@ -95,8 +95,9 @@ tables, and stating the verbs next to the policies makes the intent reviewable:
 **Service role.** The API holds the service-role key, which bypasses RLS. It is
 used in exactly four places, all greppable via `.admin`: the ingestion pipeline
 (runs after the response, with no user token in scope), the audit writer (users
-must not be able to forge or erase entries), studio generation, and the
-invite-by-email lookup.
+must not be able to forge or erase entries), studio generation, and sharing —
+which both looks an address up in `profiles` and, when it finds nothing, creates
+the invited account through the auth admin API.
 
 **Storage.** Both buckets are private. Object keys are
 `{notebookId}/{sourceId}/{filename}`, so a single membership check on the first
@@ -212,13 +213,59 @@ address pool would get a fresh one per address:
 | Limiter   | Default    | Applies to                                       |
 | --------- | ---------- | ------------------------------------------------ |
 | `default` | 120/min    | everything                                       |
-| `ai`      | 20/min     | routes marked `@AiRateLimited()` — chat, studio, source ingest |
+| `ai`      | 20/min     | routes marked `@AiRateLimited()` — chat, studio, source ingest, sharing |
 
 Named throttlers otherwise apply to every route, so the `ai` limiter uses a
 `skipIf` that opts out unless the handler is marked.
 
 Also bounded: 50 MB per upload, 300 sources per notebook, 10 MB per fetched page,
 and a character budget on the studio prompt corpus.
+
+---
+
+## Sharing and invitations
+
+Sharing takes an email address and grants it access whether or not it has an
+account. An address with no account gets one created for it — passwordless,
+unconfirmed — and Supabase mails it an invitation; the membership row is written
+either way, so the notebook is there when the link is opened.
+
+**This removed an account-existence oracle rather than adding one.** Sharing used
+to answer "no such account" for an address nobody had signed up with, which let
+any notebook owner test addresses one at a time. Both branches now return the
+same 201 and the same shape, so the response says nothing about who has an
+account. What the caller learns is the same thing anyone learns by sending mail
+to an address: nothing.
+
+**What that trades for.** The endpoint can now put this product's name in a
+stranger's inbox, so it carries the `ai` limiter (20/min per user) rather than
+the default one, Supabase's own `email_sent` cap applies underneath, and every
+call is written to `audit_events` as `notebook.invitation_sent` with the actor.
+Unsolicited mail is therefore attributable and bounded, not prevented — the same
+position every collaboration product is in.
+
+**Redemption.** The link in the mail points at `/auth/invite` on our own domain
+carrying a single-use `token_hash`, not at Supabase's `/verify`. That endpoint
+hands the session back in a URL *fragment*, which would leave tokens in browser
+history and in any `Referer` the landing page emits, and which no server can read
+— so the app could not sign the invitee in at all. Exchanging the hash in a Route
+Handler keeps the whole handshake server-side and puts the session straight into
+httpOnly cookies. It also means an invitation link needs no entry in Supabase's
+redirect allowlist, so that list stays as narrow as the deployment checklist
+below asks for.
+
+An invitation is single-use and expires in 15 minutes (`otp_expiry`). Until it is
+opened the account it created has no password and no confirmed address, so
+nobody — including whoever was invited — can sign in to it. The member list marks
+those memberships **pending** from `profiles.confirmed_at`, a mirror of
+`auth.users.confirmed_at` maintained by trigger.
+
+That column has to be trustworthy, so `20260101000600` narrows the table-wide
+`UPDATE` grant on `profiles` to the columns a profile actually owns
+(`display_name`, `avatar_url`, `locale`, `theme`). Without that, RLS would
+happily let anyone mark their own invitation accepted — and rewrite the mirrored
+`email` that sharing looks addresses up by, which was already reachable before
+this column existed.
 
 ---
 

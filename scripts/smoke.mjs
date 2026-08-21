@@ -233,6 +233,63 @@ const editorWrite = await api(tokenB, `/notebooks/${notebookId}/sources/text`, {
 });
 check('promoted editor can add a source', editorWrite.status === 201, `got ${editorWrite.status}`);
 
+console.log('\n== inviting an address with no account ==');
+check('inviting an existing account reports no invitation', invite.body?.invitationSent === false);
+
+const strangerEmail = `carol.${stamp}@example.com`;
+const strangerInvite = await api(tokenA, `/notebooks/${notebookId}/members`, {
+  method: 'POST',
+  body: { email: strangerEmail, role: 'viewer' },
+});
+check('an unknown address is invited rather than refused', strangerInvite.status === 201, JSON.stringify(strangerInvite.body));
+check('and the response says an invitation was emailed', strangerInvite.body?.invitationSent === true);
+
+const membersAfterInvite = (await api(tokenA, `/notebooks/${notebookId}/members`)).body ?? [];
+const strangerMember = membersAfterInvite.find((m) => m.email === strangerEmail);
+check('the invitee is a member before they ever sign in', Boolean(strangerMember), 'not in the member list');
+check('and is marked pending until they accept', strangerMember?.pending === true, JSON.stringify(strangerMember));
+check(
+  'a member who has signed in is not marked pending',
+  membersAfterInvite.find((m) => m.email === emailB)?.pending === false,
+  JSON.stringify(membersAfterInvite.find((m) => m.email === emailB)),
+);
+
+// The mirror has to survive acceptance, and `auth.users.confirmed_at` is a
+// generated column — a trigger declared `after update of confirmed_at` would
+// never fire and every invitation would read pending forever.
+const inviteMail = await fetch(
+  `http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:${strangerEmail}`)}`,
+).then((r) => r.json()).catch(() => ({ messages: [] }));
+
+if (/127\.0\.0\.1|localhost/.test(SUPABASE) && inviteMail.messages?.[0]) {
+  const body = await (await fetch(`http://127.0.0.1:54324/api/v1/message/${inviteMail.messages[0].ID}`)).json();
+  const tokenHash = /token(?:_hash)?=([a-f0-9]+)/.exec(body.HTML ?? '')?.[1];
+
+  const accepted = await fetch(`${SUPABASE}/auth/v1/verify`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'invite', token_hash: tokenHash }),
+  });
+  check('the invitation can be accepted', accepted.ok, `got ${accepted.status}`);
+
+  const afterAccept = (await api(tokenA, `/notebooks/${notebookId}/members`)).body ?? [];
+  check(
+    'accepting clears pending',
+    afterAccept.find((m) => m.email === strangerEmail)?.pending === false,
+    JSON.stringify(afterAccept.find((m) => m.email === strangerEmail)),
+  );
+} else {
+  console.log('  SKIP  acceptance: needs the local stack and Mailpit');
+}
+
+// Inviting the same address twice must not create a second account, and must
+// not read as a fresh invitation.
+const strangerAgain = await api(tokenA, `/notebooks/${notebookId}/members`, {
+  method: 'POST',
+  body: { email: strangerEmail, role: 'viewer' },
+});
+check('re-inviting the same address conflicts', strangerAgain.status === 409, `got ${strangerAgain.status}`);
+
 console.log('\n== ingestion pipeline ==');
 // The Voyage key is a placeholder, so embedding must fail *gracefully* — the
 // source should reach a terminal `failed` state rather than hang in `pending`.
@@ -312,8 +369,81 @@ try {
     location.includes('/login') && location.includes('error='),
     `location: ${location}`,
   );
+
+  const inviteRes = await fetch(`${WEB}/auth/invite?token_hash=smoke-test-bogus`, {
+    headers: { 'Accept-Language': 'de-DE,de;q=0.9' },
+    redirect: 'manual',
+  });
+  const inviteLocation = inviteRes.headers.get('location') ?? '';
+
+  check(
+    'invite redemption is not locale-redirected',
+    !/\/(en|de)\/auth\/invite/.test(inviteLocation),
+    `location: ${inviteLocation}`,
+  );
+  check(
+    'invite redemption rejects a bad token',
+    inviteLocation.includes('/login') && inviteLocation.includes('error=invalid_invite'),
+    `location: ${inviteLocation}`,
+  );
 } catch {
   console.log('  SKIP  web server not running on :3000');
+}
+
+/**
+ * The invitation link is the one place where a Go template variable and a Next
+ * route have to agree, and nothing else in the suite would notice them drifting
+ * apart. Asserted against the built template first, because that holds wherever
+ * the suite runs.
+ */
+console.log('\n== email: the invitation link ==');
+const inviteTemplate = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../supabase/templates/invite.html'),
+  'utf8',
+);
+check(
+  'the built template links at our own redemption route',
+  inviteTemplate.includes('{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}'),
+  'run `pnpm email:build`',
+);
+// Supabase's own /verify hands the session back in a URL *fragment*, which no
+// server can read — linking there would break the flow with no visible error.
+check(
+  'and never at Supabase’s verify endpoint',
+  !inviteTemplate.includes('/auth/v1/verify') && !inviteTemplate.includes('.ConfirmationURL'),
+  'the template still points at Supabase’s verify endpoint',
+);
+
+if (!/127\.0\.0\.1|localhost/.test(SUPABASE)) {
+  console.log('  SKIP  mail delivery: not a local Supabase stack');
+} else {
+  try {
+    const inbox = await fetch(
+      `http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:${strangerEmail}`)}`,
+    );
+    const { messages = [] } = await inbox.json();
+    check('an invitation email was sent to the invitee', messages.length === 1, `${messages.length} messages`);
+
+    if (messages[0]) {
+      const detail = await (await fetch(`http://127.0.0.1:54324/api/v1/message/${messages[0].ID}`)).json();
+      const html = detail.HTML ?? '';
+
+      // A stack started before `supabase/templates/` existed still serves
+      // GoTrue's built-in mail. That is a stale container, not a broken
+      // feature, so say which one it is instead of failing the suite.
+      if (/\/auth\/invite\?token_hash=/.test(html)) {
+        check('the delivered mail carries the redemption link', true);
+      } else {
+        console.log(
+          '  SKIP  the stack is serving Supabase’s default invite mail, not\n' +
+            '        supabase/templates/invite.html — run `pnpm db:stop && pnpm db:start`\n' +
+            '        to load it, then re-run this suite to check the delivered mail.',
+        );
+      }
+    }
+  } catch {
+    console.log('  SKIP  Mailpit not reachable on :54324');
+  }
 }
 
 console.log(`\n${'='.repeat(46)}`);

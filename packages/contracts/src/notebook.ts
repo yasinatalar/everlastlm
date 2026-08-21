@@ -54,6 +54,12 @@ export const notebookMemberSchema = z.object({
   displayName: z.string().nullable(),
   email: z.string().nullable(),
   avatarUrl: z.string().nullable(),
+  /**
+   * The membership is real but nobody has arrived behind it yet — an invitation
+   * that has not been opened, or a signup that was never confirmed. Either way
+   * this person cannot sign in, so they have not seen the notebook.
+   */
+  pending: z.boolean(),
   createdAt: z.iso.datetime(),
 });
 export type NotebookMember = z.infer<typeof notebookMemberSchema>;
@@ -63,6 +69,25 @@ export const inviteMemberSchema = z.object({
   role: z.enum(['editor', 'viewer']),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+/**
+ * Sharing has two outcomes and the caller has to tell them apart.
+ *
+ * An address that already has an account gains access immediately. An address
+ * that does not gets an account created for it and an invitation email.
+ *
+ * This is not the same question as `member.pending`, which is why both exist.
+ * `invitationSent` says what *this call* did — it is what decides whether the
+ * confirmation reads "now has access" or "invitation sent". `pending` says
+ * whether anyone is behind the membership yet, and stays true until the link is
+ * opened. Adding someone who signed up but never confirmed their address sets
+ * `pending` without sending anything, so collapsing the two would misreport it.
+ */
+export const inviteMemberResultSchema = z.object({
+  member: notebookMemberSchema,
+  invitationSent: z.boolean(),
+});
+export type InviteMemberResult = z.infer<typeof inviteMemberResultSchema>;
 
 export const changeMemberRoleSchema = z.object({
   role: z.enum(['editor', 'viewer']),

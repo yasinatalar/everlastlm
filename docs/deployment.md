@@ -64,6 +64,30 @@ Or, with no CLI setup, paste **`supabase/schema.sql`** into the dashboard's SQL
 Editor and run it. That file is every migration concatenated in order
 (`pnpm db:schema` regenerates it) and is verified to apply as a single script.
 
+> **Taking the paste route costs you the migration history.** `db push` decides
+> what to run from `supabase_migrations.schema_migrations`, which the SQL Editor
+> never writes, so the *next* migration you add makes it try to replay the
+> schema from the first file and stop on:
+>
+> ```
+> ERROR: type "notebook_role" already exists (SQLSTATE 42710)
+> ```
+>
+> The database is fine; only the bookkeeping is missing. Tell the CLI what is
+> already there, then push — the repair runs no SQL, it only records status, and
+> naming a version twice is harmless:
+>
+> ```bash
+> supabase migration list --linked      # local vs remote, confirm before repairing
+> supabase migration repair --status applied \
+>   20260101000000 20260101000100 20260101000200 \
+>   20260101000300 20260101000400 20260101000500
+> supabase db push                      # now only genuinely new migrations run
+> ```
+>
+> Do this once and the history is correct from then on. Use the CLI route on a
+> fresh project and the problem never arises.
+
 Confirm it worked — this should list 10 tables:
 
 ```bash
@@ -81,14 +105,22 @@ Then in **Authentication → URL Configuration**:
 > Add `http://localhost:3000/auth/callback` too if you want the same project to
 > serve local development. Prefer a separate project for that.
 
+**Site URL is what invitation links are built from.** The invite mail links at
+`{{ .SiteURL }}/auth/invite?token_hash=…` — your own domain, not Supabase's
+verify endpoint — so getting Site URL wrong points every invitation at the wrong
+host. It needs no addition to the redirect allowlist, which is why that list
+stays this short.
+
 In **Authentication → Providers → Email**, keep _Confirm email_ on.
 
-**Configure custom SMTP before you test signup**, under Project Settings → Auth
-→ SMTP. This is not a nicety — Supabase's built-in sender has two limits that
-look exactly like a broken app:
+**Configure custom SMTP before you test signup or sharing**, under Project
+Settings → Auth → SMTP. This is not a nicety — Supabase's built-in sender has two
+limits that look exactly like a broken app:
 
 - It **only delivers to addresses on your project's team**. Sign up with any
-  other address and no mail is sent, with no error surfaced anywhere.
+  other address and no mail is sent, with no error surfaced anywhere. Sharing a
+  notebook with anyone outside the team fails the same silent way — the account
+  is created and the membership written, but the invitation never arrives.
 - It is capped at **2 messages per hour**, with no delivery SLA.
 
 Supabase documents it as being for demos and template testing only. Any SMTP

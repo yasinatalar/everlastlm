@@ -20,9 +20,10 @@ import { initials } from '@/lib/utils';
 
 const inviteErrorKey = (error: unknown): string => {
   if (error instanceof ApiRequestError) {
-    if (error.code === 'invitee.not_found') return 'noAccount';
     if (error.code === 'member.already_present') return 'alreadyMember';
     if (error.code === 'member.self_invite') return 'alreadyMember';
+    if (error.code === 'invite.email_rate_limited') return 'inviteRateLimited';
+    if (error.code === 'dependency.email_unconfigured') return 'inviteMailUnavailable';
   }
   return '';
 };
@@ -56,8 +57,17 @@ export function ShareDialog({
     setError(null);
 
     try {
-      const member = await invite.mutateAsync({ email: email.trim(), role });
-      toast.success(t('invited', { name: member.displayName ?? member.email ?? email }));
+      const trimmed = email.trim();
+      const { member, invitationSent } = await invite.mutateAsync({ email: trimmed, role });
+
+      // Two different things happened, and saying "now has access" for both
+      // would be a small lie: nobody is behind a brand-new account until the
+      // invitation in their inbox is opened.
+      toast.success(
+        invitationSent
+          ? t('invitationSent', { email: member.email ?? trimmed })
+          : t('invited', { name: member.displayName ?? member.email ?? trimmed }),
+      );
       setEmail('');
     } catch (caught) {
       const key = inviteErrorKey(caught);
@@ -132,8 +142,21 @@ export function ShareDialog({
                   </span>
 
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-foreground">
-                      {member.displayName ?? member.email}
+                    <span className="flex items-center gap-1.5">
+                      <span className="min-w-0 truncate text-[13px] text-foreground">
+                        {member.displayName ?? member.email}
+                      </span>
+                      {/*
+                        The membership is real, so the row stays exactly where it
+                        is and keeps its controls — the owner can still change or
+                        revoke the role. Only the claim that this person has read
+                        anything is withdrawn.
+                      */}
+                      {member.pending && (
+                        <Badge tone="muted" title={t('pendingHint')} className="shrink-0">
+                          {t('pending')}
+                        </Badge>
+                      )}
                     </span>
                     {member.displayName && member.email && (
                       <span className="block truncate text-[11px] text-foreground-subtle">

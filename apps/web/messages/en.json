@@ -38,7 +38,15 @@
     "weakPassword": "Choose a longer password — at least 12 characters.",
     "emailTaken": "An account with that email already exists.",
     "rateLimited": "Too many attempts. Please wait a moment and try again.",
+    "inviteExpired": "That invitation link has expired or has already been used. Ask for a new one, or sign in if you have already set a password.",
+    "linkExpired": "That link has expired or has already been used. Please request a new one.",
     "genericError": "Something went wrong. Please try again."
+  },
+  "welcome": {
+    "title": "Welcome to Everlast",
+    "subtitle": "A notebook has been shared with you. Choose a password so you can sign back in later.",
+    "submit": "Set password and continue",
+    "saving": "Setting password…"
   },
   "notebooks": {
     "title": "Notebooks",
@@ -184,7 +192,7 @@
   "sharing": {
     "title": "Share",
     "shareTitle": "Share “{title}”",
-    "shareSubtitle": "People you add can open this notebook and ask questions.",
+    "shareSubtitle": "People you add can open this notebook and ask questions. If they don’t have an account yet, we’ll email them an invitation.",
     "inviteLabel": "Email address",
     "invitePlaceholder": "colleague@company.com",
     "invite": "Add",
@@ -198,9 +206,13 @@
     "you": "You",
     "owner": "Owner",
     "invited": "{name} now has access",
+    "invitationSent": "Invitation sent to {email}",
+    "pending": "Invited",
+    "pendingHint": "Has not opened their invitation yet, so they have not seen this notebook.",
     "removed": "Access removed",
-    "noAccount": "No Everlast account uses that email address yet.",
     "alreadyMember": "That person already has access.",
+    "inviteRateLimited": "Too many invitations just now. Try again in a few minutes.",
+    "inviteMailUnavailable": "Invitations cannot be emailed right now. Try again later.",
     "lastOwner": "A notebook must always have at least one owner."
   },
   "settings": {

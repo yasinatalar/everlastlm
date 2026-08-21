@@ -281,6 +281,18 @@ const EMAILS = {
     fallbackUrl: '{{ .ConfirmationURL }}',
   },
 
+  /**
+   * The only mail that does not use `{{ .ConfirmationURL }}`.
+   *
+   * That URL points at Supabase's `/verify`, which answers a browser with a
+   * redirect carrying the session in the URL *fragment* — invisible to any
+   * server, so the app cannot sign the invitee in, and left sitting in their
+   * history. Linking straight at our own route with the single-use
+   * `{{ .TokenHash }}` keeps the exchange server-side, and as an ordinary link
+   * to our own site it needs no entry in the redirect allowlist.
+   *
+   * See `apps/web/src/app/auth/invite/route.ts`, which redeems it.
+   */
   invite: {
     file: 'invite.html',
     preheader: 'A notebook on Everlast has been shared with you.',
@@ -290,9 +302,12 @@ const EMAILS = {
       'Someone shared an Everlast notebook with you — their sources, and every answer grounded in them. Accept below to set up your account and open it.',
       'You will only ever see the notebook you were invited to.',
     ],
-    action: { label: 'Accept invitation', url: '{{ .ConfirmationURL }}' },
-    note: 'This invitation expires in 15 minutes. If you were not expecting it, you can ignore this email and no account will be created.',
-    fallbackUrl: '{{ .ConfirmationURL }}',
+    action: {
+      label: 'Accept invitation',
+      url: '{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}',
+    },
+    note: 'This invitation expires in 15 minutes and can be opened once. If you were not expecting it, you can ignore this email — the account it created has no password and nobody can sign in to it.',
+    fallbackUrl: '{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}',
   },
 
   magic_link: {

@@ -6,10 +6,10 @@ import type { AuthenticatedUser } from '../context/request-context';
 export const AI_RATE_LIMIT_KEY = 'everlast:ai-rate-limited';
 
 /**
- * Marks a route as billed work — model calls, embeddings, speech synthesis —
- * so the stricter `ai` limiter applies to it. Every named throttler otherwise
- * applies to every route, which would impose the expensive-endpoint budget on
- * ordinary reads.
+ * Marks a route as costly work — model calls, embeddings, speech synthesis, or
+ * outbound email — so the stricter `ai` limiter applies to it. Every named
+ * throttler otherwise applies to every route, which would impose the
+ * expensive-endpoint budget on ordinary reads.
  */
 export const AiRateLimited = () => SetMetadata(AI_RATE_LIMIT_KEY, true);
 

@@ -31,6 +31,20 @@ conversations, notes and studio artifacts. Everything a user can see is reached
 never absent: creating a notebook creates the owner membership in the same
 transaction (a trigger), and the last owner cannot be demoted or removed.
 
+**Invitation** — sharing with an address that has no account yet. There is no
+invitation table: the account is created immediately (passwordless, unconfirmed)
+and the membership is written against it, so an invitation *is* a member nobody
+is behind yet. A member is **pending** while `profiles.confirmed_at` is null,
+which covers an invitation nobody opened and a signup nobody finished — both
+mean the same thing to the owner reading the list, that this person cannot sign
+in and so has not seen the notebook.
+
+Pending is a property of the member and outlives the call that created it.
+`invitationSent`, returned only by the share operation, is a property of that
+call — it says whether mail went out, which is what decides the wording of the
+confirmation. Sharing with an unconfirmed signup sets one without the other, so
+they are not interchangeable.
+
 **Source** — one document a notebook reasons over: a PDF, DOCX, plain text,
 Markdown, or a fetched web page. A source moves through a fixed lifecycle and
 never moves backwards:

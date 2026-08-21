@@ -5,6 +5,7 @@ import type {
   ChangeMemberRoleInput,
   CreateNotebookInput,
   InviteMemberInput,
+  InviteMemberResult,
   Notebook,
   NotebookMember,
   Page,
@@ -79,7 +80,7 @@ export const useInviteMember = (notebookId: string) => {
 
   return useMutation({
     mutationFn: (input: InviteMemberInput) =>
-      apiFetch<NotebookMember>(`/notebooks/${notebookId}/members`, {
+      apiFetch<InviteMemberResult>(`/notebooks/${notebookId}/members`, {
         method: 'POST',
         body: input,
       }),

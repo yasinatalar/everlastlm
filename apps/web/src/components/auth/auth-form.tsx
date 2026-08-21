@@ -39,6 +39,20 @@ const errorKeyFor = (message: string, mode: 'signin' | 'signup'): string => {
   return 'genericError';
 };
 
+/**
+ * Messages for the redirects that land here from an emailed link.
+ *
+ * `/auth/invite` and `/auth/callback` cannot render anything themselves, so a
+ * link that has expired or been used already can only say so by sending the
+ * reason along to this page. Without this the person is bounced to a login form
+ * that gives no hint why the button in their mail did nothing.
+ */
+const REDIRECT_ERROR_KEYS: Record<string, string> = {
+  invalid_invite: 'inviteExpired',
+  invalid_code: 'linkExpired',
+  missing_code: 'linkExpired',
+};
+
 export function AuthForm({
   mode,
   title,
@@ -51,10 +65,14 @@ export function AuthForm({
   const t = useTranslations('auth');
   const searchParams = useSearchParams();
 
+  const redirectErrorKey = REDIRECT_ERROR_KEYS[searchParams.get('error') ?? ''];
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    redirectErrorKey ? t(redirectErrorKey) : null,
+  );
   const [pending, setPending] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
 

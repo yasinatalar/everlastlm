@@ -38,7 +38,15 @@
     "weakPassword": "Wähle ein längeres Passwort — mindestens 12 Zeichen.",
     "emailTaken": "Mit dieser E-Mail-Adresse existiert bereits ein Konto.",
     "rateLimited": "Zu viele Versuche. Bitte warte einen Moment.",
+    "inviteExpired": "Dieser Einladungslink ist abgelaufen oder wurde bereits verwendet. Bitte lass dir einen neuen schicken — oder melde dich an, falls du schon ein Passwort gesetzt hast.",
+    "linkExpired": "Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.",
     "genericError": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
+  },
+  "welcome": {
+    "title": "Willkommen bei Everlast",
+    "subtitle": "Ein Notizbuch wurde mit dir geteilt. Wähle ein Passwort, damit du dich später wieder anmelden kannst.",
+    "submit": "Passwort setzen und fortfahren",
+    "saving": "Passwort wird gesetzt…"
   },
   "notebooks": {
     "title": "Notizbücher",
@@ -184,7 +192,7 @@
   "sharing": {
     "title": "Teilen",
     "shareTitle": "„{title}“ teilen",
-    "shareSubtitle": "Wen du hinzufügst, kann dieses Notizbuch öffnen und Fragen stellen.",
+    "shareSubtitle": "Wen du hinzufügst, kann dieses Notizbuch öffnen und Fragen stellen. Wer noch kein Konto hat, bekommt eine Einladung per E-Mail.",
     "inviteLabel": "E-Mail-Adresse",
     "invitePlaceholder": "kollegin@firma.de",
     "invite": "Hinzufügen",
@@ -198,9 +206,13 @@
     "you": "Du",
     "owner": "Eigentümer",
     "invited": "{name} hat jetzt Zugriff",
+    "invitationSent": "Einladung an {email} verschickt",
+    "pending": "Eingeladen",
+    "pendingHint": "Hat die Einladung noch nicht geöffnet und dieses Notizbuch daher noch nicht gesehen.",
     "removed": "Zugriff entzogen",
-    "noAccount": "Zu dieser E-Mail-Adresse gibt es noch kein Everlast-Konto.",
     "alreadyMember": "Diese Person hat bereits Zugriff.",
+    "inviteRateLimited": "Gerade zu viele Einladungen. Bitte versuche es in ein paar Minuten erneut.",
+    "inviteMailUnavailable": "Einladungen können derzeit nicht per E-Mail verschickt werden. Bitte später erneut versuchen.",
     "lastOwner": "Ein Notizbuch braucht immer mindestens einen Eigentümer."
   },
   "settings": {

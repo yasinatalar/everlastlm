@@ -32,6 +32,8 @@ export type ProfileRow = {
   avatar_url: string | null;
   locale: string;
   theme: string;
+  /** Mirror of `auth.users.confirmed_at`; null until the account is confirmed. */
+  confirmed_at: string | null;
   created_at: string;
   updated_at: string;
 };

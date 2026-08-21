@@ -15,10 +15,12 @@ import {
   uuidSchema,
   type ChangeMemberRoleInput,
   type InviteMemberInput,
+  type InviteMemberResult,
   type NotebookMember,
 } from '@everlast/contracts';
 import { zodPipe } from '../../../shared/http/zod-validation.pipe';
 import { RequiresNotebookRole } from '../../../shared/security/auth.decorators';
+import { AiRateLimited } from '../../../shared/security/throttling';
 import { MembershipService } from '../application/membership.service';
 
 @Controller('notebooks/:notebookId/members')
@@ -34,12 +36,18 @@ export class MembersController {
     return this.members.list(notebookId);
   }
 
+  /**
+   * Sharing can send mail to an address the owner typed, so it takes the strict
+   * budget rather than the default one — an endpoint that puts your domain in a
+   * stranger's inbox is worth as much restraint as one that spends model tokens.
+   */
   @Post()
   @RequiresNotebookRole('owner')
+  @AiRateLimited()
   async invite(
     @Param('notebookId', zodPipe(uuidSchema)) notebookId: string,
     @Body(zodPipe(inviteMemberSchema)) body: InviteMemberInput,
-  ): Promise<NotebookMember> {
+  ): Promise<InviteMemberResult> {
     return this.members.invite(notebookId, body);
   }
 

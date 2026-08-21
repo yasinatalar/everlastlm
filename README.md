@@ -70,7 +70,13 @@ SMTP is configured.
 **On a hosted project without custom SMTP**, Supabase's built-in sender only
 delivers to addresses on your project's team, and only 2 per hour. Signing up
 with any other address sends nothing and reports no error. Configure SMTP under
-Project Settings → Auth → SMTP before testing signup.
+Project Settings → Auth → SMTP before testing signup or sharing.
+
+Sharing a notebook with an address that has no account yet mails it an
+invitation; opening the link creates the session and asks for a password. The
+mail is rendered from `supabase/templates/invite.html`, which the local stack
+only picks up at `supabase start` — if invitations arrive looking like plain
+Supabase mail, restart with `pnpm db:stop && pnpm db:start`.
 
 To skip confirmation while developing, set `enable_confirmations = false` under
 `[auth.email]` in `supabase/config.toml`, then `pnpm db:stop && pnpm db:start`.
@@ -156,11 +162,11 @@ See [`docs/domain-model.md`](docs/domain-model.md) for the ubiquitous language a
 
 ## Verified
 
-Run against a live local Supabase (`scripts/smoke.mjs`, 35 checks): authentication
+Run against a live local Supabase (`scripts/smoke.mjs`, 47 checks): authentication
 rejection paths, cross-tenant isolation, role enforcement across owner/editor/
-viewer, SSRF blocking, duplicate detection, ingestion failure handling, and the
-ownership invariants. Plus 57 unit tests covering chunking, citation mapping,
-address filtering and token parsing.
+viewer, SSRF blocking, duplicate detection, ingestion failure handling, inviting
+an address that has no account, and the ownership invariants. Plus 84 unit tests
+covering chunking, citation mapping, address filtering and token parsing.
 
 The chat and studio paths need real `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` values
 to exercise end to end; without them the pipeline is verified only as far as

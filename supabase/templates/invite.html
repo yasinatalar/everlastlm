@@ -90,24 +90,24 @@
 
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;"><tr><td align="left">
                 <!--[if mso]>
-                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ .ConfirmationURL }}" style="height:48px;v-text-anchor:middle;width:199px;" arcsize="21%" stroke="f" fillcolor="#c2f050">
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}" style="height:48px;v-text-anchor:middle;width:199px;" arcsize="21%" stroke="f" fillcolor="#c2f050">
                   <w:anchorlock/>
                   <center style="color:#16181a;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">Accept invitation</center>
                 </v:roundrect>
                 <![endif]-->
                 <!--[if !mso]><!-- -->
-                <a class="btn" href="{{ .ConfirmationURL }}" style="display:inline-block;background-color:#c2f050;color:#16181a;font-family:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;line-height:20px;text-decoration:none;padding:14px 28px;border-radius:10px;mso-hide:all;">Accept invitation</a>
+                <a class="btn" href="{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}" style="display:inline-block;background-color:#c2f050;color:#16181a;font-family:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;line-height:20px;text-decoration:none;padding:14px 28px;border-radius:10px;mso-hide:all;">Accept invitation</a>
                 <!--<![endif]-->
               </td></tr></table>
 
                   
                   <div style="height:24px;font-size:0;line-height:24px;">&nbsp;</div>
               <div class="t-subtle" style="font-family:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#818b94;padding-bottom:6px;">Button not working? Paste this into your browser:</div>
-              <div style="font-family:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;font-size:12px;line-height:18px;word-break:break-all;"><a class="t-muted" href="{{ .ConfirmationURL }}" style="color:#656f79;text-decoration:underline;">{{ .ConfirmationURL }}</a></div>
+              <div style="font-family:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;font-size:12px;line-height:18px;word-break:break-all;"><a class="t-muted" href="{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}" style="color:#656f79;text-decoration:underline;">{{ .SiteURL }}/auth/invite?token_hash={{ .TokenHash }}</a></div>
 
                   <div class="rule" style="height:1px;background-color:#dedbd3;font-size:0;line-height:1px;margin:32px 0 20px;">&nbsp;</div>
 
-                  <div class="t-subtle" style="font-family:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#818b94;">This invitation expires in 15 minutes. If you were not expecting it, you can ignore this email and no account will be created.</div>
+                  <div class="t-subtle" style="font-family:'Inter','Inter var',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#818b94;">This invitation expires in 15 minutes and can be opened once. If you were not expecting it, you can ignore this email — the account it created has no password and nobody can sign in to it.</div>
 
                 </td></tr>
               </table>
