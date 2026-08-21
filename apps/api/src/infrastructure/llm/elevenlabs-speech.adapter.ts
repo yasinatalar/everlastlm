@@ -9,9 +9,16 @@ import {
   type SpeechTurn,
   type SynthesisResult,
 } from '../../shared/ports/speech.port';
+import { concatAudioFrames, measureDurationSeconds } from './mp3';
 
 const API_ROOT = 'https://api.elevenlabs.io/v1/text-to-speech';
-/** Words per minute for the duration estimate; ElevenLabs lands near this. */
+/**
+ * Asked for by name rather than left to the vendor default: constant bitrate is
+ * what lets a player derive the duration from the byte length, and what `mp3.ts`
+ * assumes when it measures the same duration here.
+ */
+const OUTPUT_FORMAT = 'mp3_44100_128';
+/** Words per minute, for the estimate used when a file will not parse. */
 const SPEAKING_RATE = 155;
 
 /**
@@ -41,28 +48,6 @@ const explainFailure = (statusCode: number, body: string): string => {
   return `ElevenLabs rejected the request (${statusCode}): ${message.slice(0, 200)}`;
 };
 
-/**
- * Drops a leading ID3v2 tag.
- *
- * Every clip comes back with one. Left in place they end up *inside* the
- * concatenated stream, where a decoder hits them mid-playback and reports
- * "Header missing" at each seam. Removing them from all but the first clip
- * leaves a file that decodes end to end without errors.
- */
-const stripId3 = (clip: Buffer): Buffer => {
-  if (clip.length < 10 || clip.toString('latin1', 0, 3) !== 'ID3') return clip;
-
-  // A syncsafe 32-bit length: seven bits per byte, high bit always clear.
-  const size =
-    ((clip.readUInt8(6) & 0x7f) << 21) |
-    ((clip.readUInt8(7) & 0x7f) << 14) |
-    ((clip.readUInt8(8) & 0x7f) << 7) |
-    (clip.readUInt8(9) & 0x7f);
-  const footer = clip.readUInt8(5) & 0x10 ? 10 : 0;
-
-  return clip.subarray(10 + size + footer);
-};
-
 @Injectable()
 export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
   private readonly logger = new Logger(ElevenLabsSpeechAdapter.name);
@@ -75,7 +60,8 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
   /**
    * Each turn is synthesised independently — one voice per host — and the MP3
    * payloads are concatenated. MP3 is a sequence of self-contained frames, so
-   * appending buffers yields a file every player handles; a container format
+   * appending them yields a file every player handles once the per-clip tags
+   * and stream headers are out of the way; see `mp3.ts`. A container format
    * like MP4 would need a real muxer.
    */
   async synthesiseDialogue(turns: SpeechTurn[]): Promise<SynthesisResult> {
@@ -86,18 +72,24 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
     // ElevenLabs caps concurrent requests by plan — 2 on the free tier. A
     // dialogue is one request per turn, so exceeding the cap makes a 20-turn
     // overview fail on a limit rather than on anything to do with the content.
-    const clips = await mapWithConcurrency(
-      turns,
-      this.config.ELEVENLABS_MAX_CONCURRENCY,
-      (turn) => this.synthesiseTurn(turn),
+    const clips = await mapWithConcurrency(turns, this.config.ELEVENLABS_MAX_CONCURRENCY, (turn) =>
+      this.synthesiseTurn(turn),
     );
 
+    const audio = concatAudioFrames(clips);
     const words = turns.reduce((total, turn) => total + turn.text.split(/\s+/).length, 0);
 
     return {
-      audio: Buffer.concat(clips.map((clip, index) => (index === 0 ? clip : stripId3(clip)))),
+      audio,
       mimeType: 'audio/mpeg',
-      durationSeconds: Math.max(1, Math.round((words / SPEAKING_RATE) * 60)),
+      // Measured from the frames that were actually produced. The estimate from
+      // the script only stands in for a file we could not parse, and being off
+      // by a minute is visible: this number is the running time the player and
+      // the artifact list both show.
+      durationSeconds: Math.max(
+        1,
+        Math.round(measureDurationSeconds(audio) ?? (words / SPEAKING_RATE) * 60),
+      ),
     };
   }
 
@@ -107,7 +99,9 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
         ? this.config.ELEVENLABS_VOICE_HOST_A
         : this.config.ELEVENLABS_VOICE_HOST_B;
 
-    const response = await request(`${API_ROOT}/${encodeURIComponent(voiceId)}`, {
+    const url = `${API_ROOT}/${encodeURIComponent(voiceId)}?output_format=${OUTPUT_FORMAT}`;
+
+    const response = await request(url, {
       method: 'POST',
       headers: {
         'xi-api-key': this.config.ELEVENLABS_API_KEY ?? '',
