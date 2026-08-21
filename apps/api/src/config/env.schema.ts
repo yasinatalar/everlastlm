@@ -76,8 +76,18 @@ export const envSchema = z.object({
   ELEVENLABS_API_KEY: optional(z.string()),
   /** Concurrent TTS requests. The free tier allows 2; paid plans allow more. */
   ELEVENLABS_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(2),
-  ELEVENLABS_VOICE_HOST_A: z.string().default('21m00Tcm4TlvDq8ikWAM'),
-  ELEVENLABS_VOICE_HOST_B: z.string().default('AZnzlk1XvdvUeBnXmlld'),
+  /**
+   * The two podcast hosts, as ElevenLabs voice ids.
+   *
+   * These default to voices in the *premade* category (Sarah and Eric), which
+   * every plan may call. Do not swap in a voice from the community Voice
+   * Library without checking the plan: library voices are paid-only over the
+   * API and a free key gets `402 paid_plan_required` on every single turn, so
+   * the overview silently comes out as a script with no audio. `GET
+   * https://api.elevenlabs.io/v2/voices` lists what a given key may use.
+   */
+  ELEVENLABS_VOICE_HOST_A: z.string().default('EXAVITQu4vr4xnSDxMaL'),
+  ELEVENLABS_VOICE_HOST_B: z.string().default('cjVigY5qzO86Huf0OWal'),
 
   RATE_LIMIT_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
   RATE_LIMIT_LIMIT: z.coerce.number().int().min(1).default(120),

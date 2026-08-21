@@ -174,6 +174,14 @@ RATE_LIMIT_LIMIT              120
 RATE_LIMIT_AI_LIMIT           20
 ```
 
+**Leave `ELEVENLABS_VOICE_HOST_A/B` unset unless you have a reason.** The
+defaults are _premade_ voices, which every ElevenLabs plan may call over the
+API. A voice taken from the community Voice Library is paid-only: a free key
+gets `402 paid_plan_required` on every turn, and because the script is still
+worth keeping, the overview lands as a transcript with no audio rather than as
+a failure. `GET https://api.elevenlabs.io/v2/voices` lists what your key may
+use — anything in the `premade` category is safe.
+
 **`SUPABASE_JWT_SECRET` depends on how your project signs tokens.** Check the
 `alg` in the header of your anon key:
 

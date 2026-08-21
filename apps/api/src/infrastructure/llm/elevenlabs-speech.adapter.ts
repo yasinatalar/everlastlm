@@ -14,6 +14,55 @@ const API_ROOT = 'https://api.elevenlabs.io/v1/text-to-speech';
 /** Words per minute for the duration estimate; ElevenLabs lands near this. */
 const SPEAKING_RATE = 155;
 
+/**
+ * Pulls the human-readable half out of an ElevenLabs error body.
+ *
+ * The vendor sends `{"detail": {"message": "..."}}` for most refusals and a
+ * bare `{"detail": "..."}` for a few. Both matter to whoever runs the server:
+ * "Free users cannot use library voices via the API" is a five-minute config
+ * fix, and collapsing it into "speech synthesis failed" turns it into an
+ * afternoon of guessing.
+ */
+const explainFailure = (statusCode: number, body: string): string => {
+  let detail: unknown;
+  try {
+    ({ detail } = JSON.parse(body) as { detail?: unknown });
+  } catch {
+    detail = undefined;
+  }
+
+  const message =
+    typeof detail === 'string'
+      ? detail
+      : typeof (detail as { message?: unknown })?.message === 'string'
+        ? (detail as { message: string }).message
+        : body.slice(0, 200);
+
+  return `ElevenLabs rejected the request (${statusCode}): ${message.slice(0, 200)}`;
+};
+
+/**
+ * Drops a leading ID3v2 tag.
+ *
+ * Every clip comes back with one. Left in place they end up *inside* the
+ * concatenated stream, where a decoder hits them mid-playback and reports
+ * "Header missing" at each seam. Removing them from all but the first clip
+ * leaves a file that decodes end to end without errors.
+ */
+const stripId3 = (clip: Buffer): Buffer => {
+  if (clip.length < 10 || clip.toString('latin1', 0, 3) !== 'ID3') return clip;
+
+  // A syncsafe 32-bit length: seven bits per byte, high bit always clear.
+  const size =
+    ((clip.readUInt8(6) & 0x7f) << 21) |
+    ((clip.readUInt8(7) & 0x7f) << 14) |
+    ((clip.readUInt8(8) & 0x7f) << 7) |
+    (clip.readUInt8(9) & 0x7f);
+  const footer = clip.readUInt8(5) & 0x10 ? 10 : 0;
+
+  return clip.subarray(10 + size + footer);
+};
+
 @Injectable()
 export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
   private readonly logger = new Logger(ElevenLabsSpeechAdapter.name);
@@ -46,7 +95,7 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
     const words = turns.reduce((total, turn) => total + turn.text.split(/\s+/).length, 0);
 
     return {
-      audio: Buffer.concat(clips),
+      audio: Buffer.concat(clips.map((clip, index) => (index === 0 ? clip : stripId3(clip)))),
       mimeType: 'audio/mpeg',
       durationSeconds: Math.max(1, Math.round((words / SPEAKING_RATE) * 60)),
     };
@@ -77,7 +126,7 @@ export class ElevenLabsSpeechAdapter extends SpeechSynthesisPort {
     if (response.statusCode >= 400) {
       const detail = await response.body.text();
       this.logger.error(`elevenlabs responded ${response.statusCode}: ${detail.slice(0, 300)}`);
-      throw new DependencyFailureError('elevenlabs', 'speech synthesis failed');
+      throw new DependencyFailureError('elevenlabs', explainFailure(response.statusCode, detail));
     }
 
     return Buffer.from(await response.body.arrayBuffer());

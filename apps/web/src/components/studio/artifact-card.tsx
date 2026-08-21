@@ -91,7 +91,13 @@ export function ArtifactCard({
         <DialogContent title={t(LABEL_KEYS[artifact.kind])} size="lg" className="max-h-[85dvh]">
           <div className="max-h-[70dvh] overflow-y-auto scrollbar-thin px-6 py-4">
             {artifact.content && (
-              <ArtifactViewer content={artifact.content} audioUrl={artifact.audioUrl} />
+              <ArtifactViewer
+                content={artifact.content}
+                audioUrl={artifact.audioUrl}
+                // On a ready artifact this column carries the reason the audio
+                // is missing, not a generation failure — see `markReady`.
+                audioNote={artifact.failureReason}
+              />
             )}
           </div>
         </DialogContent>

@@ -164,7 +164,7 @@
     "focusPlaceholder": "Focus on the regulatory chapters",
     "started": "Generating — this can take a minute.",
     "failed": "Generation failed",
-    "audioUnavailable": "Audio is not configured on this deployment — the script is shown instead.",
+    "audioUnavailable": "Audio was not generated for this overview — the script is shown instead.",
     "transcript": "Transcript",
     "hostA": "Host A",
     "hostB": "Host B",

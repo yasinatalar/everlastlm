@@ -164,7 +164,7 @@
     "focusPlaceholder": "Schwerpunkt auf die Regulierungskapitel",
     "started": "Wird erstellt — das kann eine Minute dauern.",
     "failed": "Erstellung fehlgeschlagen",
-    "audioUnavailable": "Audio ist in dieser Installation nicht eingerichtet — stattdessen wird das Skript angezeigt.",
+    "audioUnavailable": "Für diese Übersicht wurde kein Audio erzeugt — stattdessen wird das Skript angezeigt.",
     "transcript": "Transkript",
     "hostA": "Host A",
     "hostB": "Host B",

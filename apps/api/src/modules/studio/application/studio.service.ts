@@ -7,6 +7,7 @@ import type {
 import { sanitiseForPrompt, sanitiseTitleForPrompt } from '../../../infrastructure/llm/prompt-safety';
 import {
   DependencyNotConfiguredError,
+  DomainError,
   InvariantViolationError,
   NotFoundError,
 } from '../../../shared/kernel/domain-error';
@@ -33,6 +34,9 @@ import { STUDIO_RECIPES } from './studio-prompts';
 const CHUNKS_PER_SOURCE = 24;
 const MAX_PROMPT_CHARS = 200_000;
 const STUDIO_EFFORT = 'high' as const;
+
+/** Recorded against a script-only overview when `TTS_PROVIDER=none`. */
+const NO_TTS_PROVIDER_NOTE = 'no speech provider is configured on this server';
 
 @Injectable()
 export class StudioService {
@@ -172,7 +176,7 @@ export class StudioService {
   ): Promise<void> {
     if (!this.speech.available) {
       this.logger.log('no TTS provider configured; storing audio overview as script only');
-      await this.studio.markReady(artifactId, content);
+      await this.studio.markReady(artifactId, content, undefined, NO_TTS_PROVIDER_NOTE);
       return;
     }
 
@@ -190,8 +194,16 @@ export class StudioService {
       });
     } catch (error) {
       this.logger.error({ err: error, artifactId }, 'speech synthesis failed');
-      // Keep the script; the user can read it and retry the audio.
-      await this.studio.markReady(artifactId, content);
+      // Keep the script — it is worth reading on its own — but say why the
+      // audio is missing. Swallowing this made a misconfigured voice id
+      // indistinguishable from having no TTS vendor at all, so the one thing
+      // that would have pointed at the fix never reached anyone.
+      await this.studio.markReady(
+        artifactId,
+        content,
+        undefined,
+        error instanceof DomainError ? error.message : 'speech synthesis failed',
+      );
     }
   }
 

@@ -102,11 +102,12 @@ export class SupabaseStudioRepository extends StudioRepository {
     artifactId: string,
     content: StudioContent,
     audio?: { storagePath: string; durationSeconds: number },
+    audioNote?: string,
   ): Promise<void> {
     await this.updateAsAdmin(artifactId, {
       status: 'ready',
       content: content as unknown as Json,
-      failure_reason: null,
+      failure_reason: audioNote ? audioNote.slice(0, 300) : null,
       ...(audio
         ? {
             audio_storage_path: audio.storagePath,

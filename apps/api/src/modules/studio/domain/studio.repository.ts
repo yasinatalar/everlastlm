@@ -12,10 +12,18 @@ export abstract class StudioRepository {
   abstract findById(notebookId: string, artifactId: string): Promise<StudioArtifact | null>;
   abstract create(data: CreateArtifactData): Promise<StudioArtifact>;
   abstract markGenerating(artifactId: string): Promise<void>;
+  /**
+   * `audioNote` explains a *missing* audio track on an otherwise successful
+   * artifact. It shares the `failure_reason` column with a failed generation —
+   * unambiguous because `status` says which of the two this is — so that "no
+   * TTS vendor configured" and "the vendor refused this voice" stop looking
+   * identical to the reader.
+   */
   abstract markReady(
     artifactId: string,
     content: StudioContent,
     audio?: { storagePath: string; durationSeconds: number },
+    audioNote?: string,
   ): Promise<void>;
   abstract markFailed(artifactId: string, reason: string): Promise<void>;
   abstract delete(artifactId: string): Promise<void>;

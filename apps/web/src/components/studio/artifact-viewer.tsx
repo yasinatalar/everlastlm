@@ -12,9 +12,12 @@ import type { StudioContent } from '@everlast/contracts';
 export function ArtifactViewer({
   content,
   audioUrl,
+  audioNote,
 }: {
   content: StudioContent;
   audioUrl: string | null;
+  /** Why the audio is missing, when the script generated but speech did not. */
+  audioNote?: string | null;
 }) {
   const t = useTranslations('studio');
 
@@ -187,9 +190,12 @@ export function ArtifactViewer({
               <track kind="captions" />
             </audio>
           ) : (
-            <p className="rounded-lg bg-surface-sunken px-3 py-2 text-[12px] leading-relaxed text-foreground-muted">
-              {t('audioUnavailable')}
-            </p>
+            <div className="rounded-lg bg-surface-sunken px-3 py-2 text-[12px] leading-relaxed text-foreground-muted">
+              <p>{t('audioUnavailable')}</p>
+              {audioNote && (
+                <p className="mt-1 text-foreground-subtle">{audioNote}</p>
+              )}
+            </div>
           )}
 
           <Section title={t('transcript')}>
