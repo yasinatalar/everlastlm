@@ -250,7 +250,7 @@ The workflows:
 
 | Workflow      | Trigger                   | Does                                                                                        |
 | ------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
-| `ci.yml`      | every push and PR         | install, build contracts, typecheck, unit tests, full build                                 |
+| `ci.yml`      | PRs, and via `deploy.yml` | install, build contracts, typecheck, unit tests, full build                                 |
 | `deploy.yml`  | push to `main`, or manual | runs CI, then deploys only the projects whose files changed; verifies API health afterwards |
 | `migrate.yml` | **manual only**           | `supabase db push`, with a dry run by default and a typed confirmation                      |
 

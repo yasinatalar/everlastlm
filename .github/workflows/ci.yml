@@ -1,15 +1,29 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_call: # so deploy.yml can require this before shipping
 
+# Deliberately no `push: [main]` trigger. deploy.yml runs on every push to main
+# and calls this workflow as its `verify` job, which is not path-filtered — so
+# main is covered either way. Running here as well put two claimants on the
+# concurrency group below, and GitHub killed one of them every time:
+#
+#   Canceling since a higher priority waiting request for
+#   ci-refs/heads/main exists
+#
+# Eight consecutive pushes to main were cancelled that way. The work still ran
+# inside Deploy, so every commit had passing checks *and* a red CI run next to
+# it — which is worth more confusion than a duplicated build is worth.
+
 concurrency:
-  # A newer push makes an in-flight run irrelevant.
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer commit on a pull request makes an in-flight run irrelevant, so
+  # cancel it. A push does not: on main this workflow runs as deploy.yml's
+  # `verify`, and deploy.yml sets `cancel-in-progress: false` precisely so that
+  # two deploys never race. Cancelling here would reach past that guard and
+  # kill the verify step of a deploy that is already shipping.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
