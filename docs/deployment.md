@@ -19,18 +19,18 @@ is verified after it ships.
 Vercel freezes a function the moment the response is sent, and kills it at the
 plan's ceiling. Measured on this app with six real sources:
 
-| Work | Time |
-| --- | --- |
-| Studio briefing doc / study guide (Opus 5, effort high) | ~121s |
-| Audio overview (script + one TTS call per turn) | longer still |
-| Source ingestion, large PDF at 3 RPM embeddings | can exceed 60s |
-| Chat answer | comfortably under |
+| Work                                                    | Time              |
+| ------------------------------------------------------- | ----------------- |
+| Studio briefing doc / study guide (Opus 5, effort high) | ~121s             |
+| Audio overview (script + one TTS call per turn)         | longer still      |
+| Source ingestion, large PDF at 3 RPM embeddings         | can exceed 60s    |
+| Chat answer                                             | comfortably under |
 
 **Hobby's 60s ceiling is therefore not enough** — `apps/api/vercel.json` sets
 `maxDuration: 300`, which requires **Pro**. On Hobby the value is clamped and
 studio generation is killed mid-run, leaving the artifact stuck at `generating`.
 
-Things that do *not* fix this, tested:
+Things that do _not_ fix this, tested:
 
 - **A queue (QStash/Inngest) does not extend the timeout.** It adds durability
   and retries, but each callback is still a function bound by the same ceiling.
@@ -81,7 +81,7 @@ Then in **Authentication → URL Configuration**:
 > Add `http://localhost:3000/auth/callback` too if you want the same project to
 > serve local development. Prefer a separate project for that.
 
-In **Authentication → Providers → Email**, keep *Confirm email* on.
+In **Authentication → Providers → Email**, keep _Confirm email_ on.
 
 **Configure custom SMTP before you test signup**, under Project Settings → Auth
 → SMTP. This is not a nicety — Supabase's built-in sender has two limits that
@@ -98,6 +98,24 @@ provider works — Resend, Postmark, SES, or your own mail server.
 > leaves the machine: `supabase start` captures it in Mailpit at
 > http://127.0.0.1:54324 regardless of SMTP settings.
 
+Once SMTP works, replace the default Supabase-branded mail with the templates in
+`supabase/templates/`:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_...        # supabase.com/dashboard/account/tokens
+pnpm email:push --ref <ref>                 # prints a diff, sends nothing
+pnpm email:push --ref <ref> --yes
+```
+
+The `content_path` entries in `config.toml` are read by the local CLI only —
+production knows nothing about the repository — so this has to be repeated
+whenever the templates change. Do **not** reach for `supabase config push`
+instead: it applies the whole `[auth]` block, including
+`site_url = "http://localhost:3000"`, which would point every confirmation link
+on the live site at a developer's laptop. Pasting into **Authentication →
+Emails** by hand works too. See
+[supabase/templates/README.md](../supabase/templates/README.md).
+
 Grab from **Project Settings → API**: the Project URL, the `anon` key, and the
 `service_role` key.
 
@@ -109,11 +127,11 @@ Create **two** projects from the same GitHub repository.
 
 ### everlastlm-web
 
-| Setting | Value |
-| --- | --- |
-| Root Directory | `apps/web` |
+| Setting                    | Value                                  |
+| -------------------------- | -------------------------------------- |
+| Root Directory             | `apps/web`                             |
 | Include files outside root | **on** (needed for the pnpm workspace) |
-| Framework | Next.js (auto-detected) |
+| Framework                  | Next.js (auto-detected)                |
 
 Environment variables (Production):
 
@@ -129,11 +147,11 @@ that prefix is public by definition.
 
 ### everlastlm-api
 
-| Setting | Value |
-| --- | --- |
-| Root Directory | `apps/api` |
-| Include files outside root | **on** |
-| Framework | Other |
+| Setting                    | Value      |
+| -------------------------- | ---------- |
+| Root Directory             | `apps/api` |
+| Include files outside root | **on**     |
+| Framework                  | Other      |
 
 `apps/api/vercel.json` supplies the build command, the 300s `maxDuration` (see
 above — this needs Pro), and the rewrite sending every path to the Nest handler.
@@ -187,9 +205,9 @@ Add in the **api** project → Settings → Domains:
 
 DNS at your registrar:
 
-| Type | Name | Value |
-| --- | --- | --- |
-| A | `@` | `76.76.21.21` |
+| Type  | Name  | Value                  |
+| ----- | ----- | ---------------------- |
+| A     | `@`   | `76.76.21.21`          |
 | CNAME | `www` | `cname.vercel-dns.com` |
 | CNAME | `api` | `cname.vercel-dns.com` |
 
@@ -210,26 +228,26 @@ Two things depend on this split and will break if the API is not on
 
 Repository → Settings → Secrets and variables → Actions:
 
-| Secret | Where to get it |
-| --- | --- |
-| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
-| `VERCEL_ORG_ID` | `.vercel/project.json` after `vercel link`, or Team Settings |
-| `VERCEL_PROJECT_ID_WEB` | web project → Settings → General |
-| `VERCEL_PROJECT_ID_API` | api project → Settings → General |
-| `SUPABASE_ACCESS_TOKEN` | `supabase login`, or Account → Access Tokens |
-| `SUPABASE_DB_PASSWORD` | database password from project creation |
-| `SUPABASE_PROJECT_REF` | the `<ref>` from the dashboard URL |
+| Secret                  | Where to get it                                              |
+| ----------------------- | ------------------------------------------------------------ |
+| `VERCEL_TOKEN`          | Vercel → Account Settings → Tokens                           |
+| `VERCEL_ORG_ID`         | `.vercel/project.json` after `vercel link`, or Team Settings |
+| `VERCEL_PROJECT_ID_WEB` | web project → Settings → General                             |
+| `VERCEL_PROJECT_ID_API` | api project → Settings → General                             |
+| `SUPABASE_ACCESS_TOKEN` | `supabase login`, or Account → Access Tokens                 |
+| `SUPABASE_DB_PASSWORD`  | database password from project creation                      |
+| `SUPABASE_PROJECT_REF`  | the `<ref>` from the dashboard URL                           |
 
 The workflows:
 
-| Workflow | Trigger | Does |
-| --- | --- | --- |
-| `ci.yml` | every push and PR | install, build contracts, typecheck, unit tests, full build |
-| `deploy.yml` | push to `main`, or manual | runs CI, then deploys only the projects whose files changed; verifies API health afterwards |
-| `migrate.yml` | **manual only** | `supabase db push`, with a dry run by default and a typed confirmation |
+| Workflow      | Trigger                   | Does                                                                                        |
+| ------------- | ------------------------- | ------------------------------------------------------------------------------------------- |
+| `ci.yml`      | every push and PR         | install, build contracts, typecheck, unit tests, full build                                 |
+| `deploy.yml`  | push to `main`, or manual | runs CI, then deploys only the projects whose files changed; verifies API health afterwards |
+| `migrate.yml` | **manual only**           | `supabase db push`, with a dry run by default and a typed confirmation                      |
 
 Migrations are deliberately not automatic. This schema carries the RLS policies
-that *are* the authorisation boundary; a half-applied migration during a deploy
+that _are_ the authorisation boundary; a half-applied migration during a deploy
 is worse than one applied a minute later while you watch. Run `migrate.yml`
 (dry run first), then let `deploy.yml` ship the code.
 
@@ -271,7 +289,7 @@ Preview builds get a `*.vercel.app` origin that is **not** in `WEB_ORIGINS`, so
 a preview of the web app cannot call the production API. That is the safe
 default: it stops an unreviewed branch from writing to production data.
 
-To let previews talk to a backend, give the API project a *Preview*-scoped
+To let previews talk to a backend, give the API project a _Preview_-scoped
 `WEB_ORIGINS` and point previews at a staging Supabase project. Do not widen
 production's allowlist to `*.vercel.app` — every preview from every fork would
 then be a trusted origin.

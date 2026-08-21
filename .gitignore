@@ -25,6 +25,9 @@ pnpm-debug.log*
 
 supabase/.branches/
 supabase/.temp/
+# Generated on demand by `pnpm email:build --preview`; it inlines every auth
+# template twice over, so it is worth looking at and not worth committing.
+supabase/templates/preview.html
 .vercel
 .turbo
 .env*

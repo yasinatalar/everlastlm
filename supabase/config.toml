@@ -55,8 +55,35 @@ max_frequency = "1m"
 otp_length = 8
 otp_expiry = 900
 
+# Branded auth mail. The HTML is generated — edit the copy in
+# `scripts/build-email-templates.mjs` and run `pnpm email:build`, don't hand-edit
+# supabase/templates/*.html. `content_path` is read by the local CLI only;
+# production reads whatever is pasted into the dashboard under Authentication →
+# Emails, so re-paste there after changing anything here.
+
+[auth.email.template.confirmation]
+subject = "Confirm your email for Everlast"
+content_path = "./supabase/templates/confirmation.html"
+
 [auth.email.template.invite]
 subject = "You have been invited to a notebook on Everlast"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Your Everlast sign-in link"
+content_path = "./supabase/templates/magic-link.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Everlast password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new email address for Everlast"
+content_path = "./supabase/templates/email-change.html"
+
+[auth.email.template.reauthentication]
+subject = "Your Everlast confirmation code"
+content_path = "./supabase/templates/reauthentication.html"
 
 [auth.mfa]
 max_enrolled_factors = 10
