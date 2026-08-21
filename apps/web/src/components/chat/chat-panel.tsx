@@ -41,9 +41,17 @@ export function ChatPanel({
 
   // Open the most recent conversation on first load so a returning user lands
   // back where they were rather than on a blank chat.
+  //
+  // Strictly once per notebook. Re-running on every `conversationId` change is
+  // what made "New chat" look broken: the button cleared the selection, this
+  // effect saw a null id and put the very same conversation straight back.
+  const restoredFor = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!conversationId && conversations?.[0]) setConversationId(conversations[0].id);
-  }, [conversations, conversationId]);
+    if (restoredFor.current === notebookId || !conversations?.[0]) return;
+    restoredFor.current = notebookId;
+    setConversationId(conversations[0].id);
+  }, [conversations, notebookId]);
 
   // Follow the stream. `scrollTop` is set directly rather than via
   // `scrollIntoView` so it never steals focus from the composer.
@@ -93,7 +101,7 @@ export function ChatPanel({
           variant="ghost"
           size="sm"
           onClick={() => setConversationId(null)}
-          disabled={pending}
+          disabled={pending || conversationId === null}
         >
           <MessageSquarePlus className="size-3.5" />
           {t('newChat')}
