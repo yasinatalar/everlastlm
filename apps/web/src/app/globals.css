@@ -42,8 +42,7 @@
   --color-offwhite: #f7f6f2;
   --color-offwhite-raised: #fdfdfb;
 
-  --font-sans:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
 
   --radius-card: 0.875rem;
@@ -215,6 +214,63 @@
     100% {
       background-position: 0 50%;
     }
+  }
+
+  /*
+   * The audio scrubber. A range input is the only control that comes with
+   * keyboard seeking, ARIA and touch handling already right, so it is kept and
+   * repainted — its track and thumb are reachable only through these vendor
+   * pseudo-elements, which cannot be combined into one rule.
+   */
+  .scrubber {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .scrubber:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .scrubber::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--accent) var(--progress, 0%),
+      var(--border-strong) var(--progress, 0%)
+    );
+  }
+
+  .scrubber::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--accent) var(--progress, 0%),
+      var(--border-strong) var(--progress, 0%)
+    );
+  }
+
+  .scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    width: 12px;
+    margin-top: -4px;
+    border-radius: 999px;
+    background: var(--foreground);
+  }
+
+  .scrubber::-moz-range-thumb {
+    height: 12px;
+    width: 12px;
+    border: none;
+    border-radius: 999px;
+    background: var(--foreground);
   }
 
   .animate-in-up {

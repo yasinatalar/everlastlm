@@ -64,9 +64,7 @@ export function ArtifactCard({
             </span>
           </span>
 
-          {ready && (
-            <ChevronRight className="size-4 shrink-0 text-foreground-subtle" aria-hidden />
-          )}
+          {ready && <ChevronRight className="size-4 shrink-0 text-foreground-subtle" aria-hidden />}
         </button>
 
         {artifact.kind === 'audio_overview' && ready && !artifact.audioUrl && (
@@ -94,6 +92,7 @@ export function ArtifactCard({
               <ArtifactViewer
                 content={artifact.content}
                 audioUrl={artifact.audioUrl}
+                audioDurationSeconds={artifact.durationSeconds}
                 // On a ready artifact this column carries the reason the audio
                 // is missing, not a generation failure — see `markReady`.
                 audioNote={artifact.failureReason}

@@ -16,11 +16,11 @@ export const formatBytes = (bytes: number | null | undefined): string => {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
 };
 
+/** `m:ss`, empty only for a duration we do not have — zero is a real time. */
 export const formatDuration = (seconds: number | null | undefined): string => {
-  if (!seconds) return '';
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.floor(seconds % 60);
-  return `${minutes}:${rest.toString().padStart(2, '0')}`;
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '';
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${(whole % 60).toString().padStart(2, '0')}`;
 };
 
 /** Stable initials for the avatar fallback. */

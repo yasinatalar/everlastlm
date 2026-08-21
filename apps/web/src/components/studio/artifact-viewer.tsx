@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import type { StudioContent } from '@everlast/contracts';
+import { AudioPlayer } from '@/components/studio/audio-player';
 
 /**
  * Renders each studio kind. The exhaustive switch over the discriminated union
@@ -12,10 +13,12 @@ import type { StudioContent } from '@everlast/contracts';
 export function ArtifactViewer({
   content,
   audioUrl,
+  audioDurationSeconds,
   audioNote,
 }: {
   content: StudioContent;
   audioUrl: string | null;
+  audioDurationSeconds?: number | null;
   /** Why the audio is missing, when the script generated but speech did not. */
   audioNote?: string | null;
 }) {
@@ -184,17 +187,11 @@ export function ArtifactViewer({
       return (
         <div className="space-y-5">
           {audioUrl ? (
-            // eslint-disable-next-line jsx-a11y/media-has-caption -- the full
-            // transcript is rendered directly below the player.
-            <audio controls preload="metadata" src={audioUrl} className="w-full">
-              <track kind="captions" />
-            </audio>
+            <AudioPlayer url={audioUrl} durationSeconds={audioDurationSeconds ?? null} />
           ) : (
             <div className="rounded-lg bg-surface-sunken px-3 py-2 text-[12px] leading-relaxed text-foreground-muted">
               <p>{t('audioUnavailable')}</p>
-              {audioNote && (
-                <p className="mt-1 text-foreground-subtle">{audioNote}</p>
-              )}
+              {audioNote && <p className="mt-1 text-foreground-subtle">{audioNote}</p>}
             </div>
           )}
 
